@@ -3,7 +3,7 @@ let form=null,moreOpen=false,techForce=false,tagDraft=null;const detailsFilled=f
 function emptyForm(){return{date:nowLocal(),symbol:"",dir:"LONG",entry:"",exit:"",qty:"",mult:"",acc:state.accounts[0]?state.accounts[0].id:"a1",plan:"",mist:"",stop:"",tp:"",fees:"",setup:"",emo:"",notes:"",exitDate:"",stop0:"",fx:"",rt:""}}
 function fromTrade(t){return{date:t.date,symbol:t.symbol,dir:t.dir,entry:String(t.entry),exit:t.exit==null?"":String(t.exit),qty:String(t.qty),mult:t.mult&&t.mult!==1?String(t.mult):"",acc:t.acc||"",plan:t.plan||"",mist:t.mist||"",stop:t.stop==null?"":String(t.stop),tp:t.tp==null?"":String(t.tp),fees:t.fees?String(t.fees):"",setup:t.setup||"",emo:t.emo||"",notes:t.notes||"",exitDate:t.exitDate||"",stop0:t.stop0==null?"":String(t.stop0),fx:t.fx&&t.fx!==1?String(t.fx):"",rt:t.rt?String(t.rt):"",id:t.id}}
 const PH={entry:"ör. 1.0842",stop:"ör. 1.0820",tp:"ör. 1.0880",qty:"ör. 0.10",exit:"açıksa boş",fees:"ör. 2.00"};
-function fld(k,l,type){return `<div><label class="fld"><span>${l}</span><input class="inp" data-f="${k}" placeholder="${PH[k]||""}" type="${type||"text"}" ${type?"":'inputmode="decimal" enterkeyhint="next" autocomplete="off"'} value="${esc(form[k])}"></label><p class="ferr" id="fe-${k}" role="alert"></p></div>`}
+function fld(k,l,type){return `<div><label class="fld"><span>${l}</span><input class="inp" data-f="${k}" placeholder="${PH[k]||""}" type="${type||"text"}" ${type?"":'inputmode="decimal" enterkeyhint="next" autocomplete="off"'} value="${esc(form?form[k]:"")}"></label><p class="ferr" id="fe-${k}" role="alert"></p></div>`}
 function errKey(m){if(/^Tarih/.test(m))return"date";if(/^Sembol/.test(m))return"symbol";if(/^Çıkış zamanı/.test(m))return"exitDate";if(/^Giriş/.test(m))return"entry";if(/^Miktar/.test(m))return"qty";if(/^Çıkış/.test(m))return"exit";if(/^Komisyon/.test(m))return"fees";if(/^Kontrat/.test(m))return"mult";if(/stop/i.test(m)&&!/kuru/.test(m))return form&&form.stop0?"stop0":"stop";if(/hedef/i.test(m))return"tp";if(/kuru gerekli/.test(m))return"fx";return null}
 function showFormErr(msg){const k=errKey(msg);if(k&&["exitDate","mult","fx","stop0"].includes(k)){if(k==="exitDate"?!moreOpen:!(moreOpen&&techOpen())){moreOpen=true;if(k!=="exitDate")techForce=true;render()}}document.querySelectorAll(".ferr").forEach(p=>p.textContent="");document.querySelectorAll("[aria-invalid]").forEach(i=>i.removeAttribute("aria-invalid"));const lh=document.querySelector("#liveh .dn"),dup=!!lh&&(k==="stop"||k==="tp");const e=$("#err");if(e)e.textContent=dup?"":msg;if(!k)return;const inp=document.querySelector('[data-f="'+k+'"]'),fe=$("#fe-"+k);if(fe)fe.textContent=dup?"":msg;if(inp){inp.setAttribute("aria-invalid","true");inp.scrollIntoView({block:"center",behavior:"smooth"});try{inp.focus({preventScroll:true})}catch(_){}}}
 function tagSection(kind,label,items,key){return `<div>
@@ -13,7 +13,9 @@ ${tagDraft&&tagDraft.kind===kind?`<input class="inp" style="margin-top:8px" plac
 </div>`}
 const QCUR={GER40:"EUR",FRA40:"EUR",UK100:"GBP",JP225:"JPY"};
 function bigPx(sym){const i=SYMS.find(x=>x[0]===sym);return!!i&&(i[2]==="Endeks"||i[2]==="Altın"||(i[2]==="Vadeli"&&sym!=="CL")||/^(BTC|ETH)/.test(sym))}
-function fixThou(rawSym,v){const sf=symFind(rawSym),sym=sf.exact||sf.auto;v=String(v==null?"":v).trim();return sym&&bigPx(sym)&&/^\d{1,3}(\.\d{3})+$/.test(v)?v.replace(/\./g,""):v}
+// FIX(7): bilinmeyen sembolde de binlik ayracı tutarlı şekilde sıfırlanır
+// ("21.500" bilinen endeksse 21500, bilinmeyen sembolde de 21500 olur — 21.5 değil)
+function fixThou(rawSym,v){const sf=symFind(rawSym),sym=sf.exact||sf.auto;v=String(v==null?"":v).trim();if(!/^\d{1,3}(\.\d{3})+$/.test(v))return v;return (sym&&bigPx(sym))||!sym?v.replace(/\./g,""):v}
 function liveHint(){const e=num(form.entry),st=num(form.stop),t=num(form.tp),q=num(form.qty),x=num(form.exit);let m="";
 if(e!=null&&st!=null&&num(form.stop0)==null&&x==null){if(form.dir==="LONG"&&st>=e)m="Long için stop girişin altında olmalı.";else if(form.dir==="SHORT"&&st<=e)m="Short için stop girişin üstünde olmalı."}
 if(!m&&e!=null&&t!=null){if(form.dir==="LONG"&&t<=e)m="Long için hedef girişin üstünde olmalı.";else if(form.dir==="SHORT"&&t>=e)m="Short için hedef girişin altında olmalı."}
@@ -66,6 +68,3 @@ ${fld("fx","P&L kuru (işlem → hesap para birimi, boşsa 1)")}
 </div>
 <div class="savebar"><p id="err" class="dn" role="alert" style="font-size:14px;color:var(--dn);margin-bottom:6px"></p><button type="button" class="btn lg primary" data-act="save">Kaydet</button></div>
 </div>`}
-
-
-

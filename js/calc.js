@@ -1,11 +1,13 @@
 "use strict";
-function accountId(t){return t.acc&&state.accounts.some(a=>a.id===t.acc)?t.acc:state.accounts[0].id}
+// FIX(13): accounts boşken .id patlamasın — boşken "" dön
+function accountId(t){return t.acc&&state.accounts.length&&state.accounts.some(a=>a.id===t.acc)?t.acc:state.accounts.length?state.accounts[0].id:""}
 function ek(t){return t.exitDate||t.date}
 function byExit(a){return a.slice().sort((x,y)=>ek(x).localeCompare(ek(y)))}
 function holdMin(t){if(!t.exitDate||!t.date)return null;const m=(new Date(t.exitDate)-new Date(t.date))/6e4;return m>=0?m:null}
 function holdText(m){return m<60?Math.round(m)+" dk":m<1440?Math.floor(m/60)+" sa "+Math.round(m%60)+" dk":Math.floor(m/1440)+" gün "+Math.floor(m%1440/60)+" sa"}
 function holdBucket(t){const m=holdMin(t);if(m==null)return"Belirsiz";if(m<5)return"5 dk altı";if(m<30)return"5–30 dk";if(m<240)return"30 dk–4 sa";if(m<1440)return"4 sa–1 gün";return"1 gün üstü"}
-function normTrade(x){if(!x||typeof x!=="object")return null;const sym=String(x.symbol||"").trim().toUpperCase(),en=num(x.entry),q=num(x.qty),nd=v=>String(v||"").trim().replace(" ","T"),dt=nd(x.date);if(!sym||!dt||en==null||en<=0||q==null||q<=0)return null;return{id:String(x.id||newId()),date:dt,symbol:sym,dir:["SHORT","SELL"].includes(String(x.dir||"").trim().toUpperCase())?"SHORT":"LONG",entry:en,exit:(ex=>ex!=null&&ex>0?ex:null)(num(x.exit)),qty:q,stop:num(x.stop),stop0:num(x.stop0),tp:num(x.tp),fees:Math.max(0,num(x.fees)||0),mult:(mu=>mu>0?mu:1)(num(x.mult)),fx:num(x.fx)>0?num(x.fx):1,acc:x.acc?String(x.acc):"",exitDate:x.exitDate?nd(x.exitDate):"",plan:x.plan==="evet"||x.plan==="hayır"?x.plan:"",mist:String(x.mist||""),setup:String(x.setup||""),emo:String(x.emo||""),notes:String(x.notes||""),chk:Number.isInteger(x.chk)?x.chk:null,rt:Number.isInteger(x.rt)&&x.rt>=1&&x.rt<=5?x.rt:null,...(x.grp?{grp:String(x.grp)}:{})}}
+// FIX(5): tarih normalize çoklu boşluğu da "T" yapar
+function normTrade(x){if(!x||typeof x!=="object")return null;const sym=String(x.symbol||"").trim().toUpperCase(),en=num(x.entry),q=num(x.qty),nd=v=>String(v||"").trim().replace(/\s+/g,"T"),dt=nd(x.date);if(!sym||!dt||en==null||en<=0||q==null||q<=0)return null;return{id:String(x.id||newId()),date:dt,symbol:sym,dir:["SHORT","SELL"].includes(String(x.dir||"").trim().toUpperCase())?"SHORT":"LONG",entry:en,exit:(ex=>ex!=null&&ex>0?ex:null)(num(x.exit)),qty:q,stop:num(x.stop),stop0:num(x.stop0),tp:num(x.tp),fees:Math.max(0,num(x.fees)||0),mult:(mu=>mu>0?mu:1)(num(x.mult)),fx:num(x.fx)>0?num(x.fx):1,acc:x.acc?String(x.acc):"",exitDate:x.exitDate?nd(x.exitDate):"",plan:x.plan==="evet"||x.plan==="hayır"?x.plan:"",mist:String(x.mist||""),setup:String(x.setup||""),emo:String(x.emo||""),notes:String(x.notes||""),chk:Number.isInteger(x.chk)?x.chk:null,rt:Number.isInteger(x.rt)&&x.rt>=1&&x.rt<=5?x.rt:null,...(x.grp?{grp:String(x.grp)}:{})}}
 function accountOf(t){const id=accountId(t);return state.accounts.find(a=>a.id===id)||state.accounts[0]}
 function risk(t){if(t.__risk!==undefined)return t.__risk;const s=t.stop0!=null?t.stop0:t.stop;if(s==null)return null;const d=t.dir==="SHORT"?s-t.entry:t.entry-s;const r=d*t.qty*(t.mult||1)*(t.fx>0?t.fx:1);return r>0?r:null}
 function pnl(t){if(t.__pnl!==undefined)return t.__pnl;if(t.exit==null)return null;const g=(t.dir==="LONG"?t.exit-t.entry:t.entry-t.exit)*t.qty*(t.mult||1)*(t.fx>0?t.fx:1);return Math.round((g-(t.fees||0))*100)/100}
@@ -48,7 +50,13 @@ if(o.fees!=null&&o.fees<0)return"Komisyon negatif olamaz.";
 if(o.mult!=null&&o.mult<=0)return"Kontrat çarpanı 0'dan büyük olmalı.";
 if(o.exitDate&&o.date&&o.exitDate<o.date)return"Çıkış zamanı girişten önce olamaz.";
 const L=o.dir==="LONG";
-const S=o.stop0!=null?o.stop0:(o.exit==null?o.stop:null);if(S!=null&&(L?S>=o.entry:S<=o.entry))return L?"Long işlemde stop girişin altında olmalı.":"Short işlemde stop girişin üstünde olmalı.";
+// FIX(6): stop ve hedef için pozitiflik kontrolü (negatif stop sahte risk üretirdi)
+const S=o.stop0!=null?o.stop0:(o.exit==null?o.stop:null);if(S!=null&&S<=0)return"Stop fiyatı 0'dan büyük olmalı.";
+if(S!=null&&(L?S>=o.entry:S<=o.entry))return L?"Long işlemde stop girişin altında olmalı.":"Short işlemde stop girişin üstünde olmalı.";
+if(o.tp!=null&&o.tp<=0)return"Hedef fiyatı 0'dan büyük olmalı.";
 if(o.tp!=null&&(L?o.tp<=o.entry:o.tp>=o.entry))return L?"Long işlemde hedef girişin üstünde olmalı.":"Short işlemde hedef girişin altında olmalı.";
 return null}
 
+// FIX(3): kısmi kapatma çekirdeği — UI (closeTrade miktar alanı) ve testler için tek doğruluk kaynağı.
+// Başarı null döner; hata durumunda doğrulama mesajı (string) döner.
+function applyPartial(id,q,p,when){const t=state.trades.find(x=>x.id===id);if(!t||t.exit!=null)return"İşlem zaten kapalı.";if(q==null||q<=0)return"Miktar 0'dan büyük olmalı.";if(q>=t.qty)return"Tam kapanış için Miktar alanını boş bırak.";if(p==null||p<=0)return"Çıkış fiyatı 0'dan büyük olmalı.";const now=when||nowLocal(),ch={...t,id:newId(),grp:t.grp||t.id,rt:null,chk:null,qty:q,exit:p,fees:0,exitDate:now<t.date?t.date:now},ve=validate(ch);if(ve)return ve;t.grp=ch.grp;t.qty=Math.round((t.qty-q)*1e8)/1e8;state.trades.push(ch);saveTrades(state.trades);return null}

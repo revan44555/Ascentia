@@ -1,5 +1,4 @@
 "use strict";
-function addMin(d,m){const x=new Date(d);x.setMinutes(x.getMinutes()-x.getTimezoneOffset()+m);return x.toISOString().slice(0,16)}
 const mk=(a,m,k,h)=>a.map(n=>[n,m,k,h]);
 const SYMS=[].concat(
 mk(["EURUSD","GBPUSD","USDJPY","USDCHF","USDCAD","AUDUSD","NZDUSD","EURGBP","EURJPY","EURCHF","EURAUD","EURCAD","EURNZD","GBPJPY","GBPCHF","GBPAUD","GBPCAD","GBPNZD","AUDJPY","AUDCHF","AUDCAD","AUDNZD","NZDJPY","NZDCHF","NZDCAD","CADJPY","CADCHF","CHFJPY","USDTRY","EURTRY","USDMXN","USDZAR","USDSEK","USDNOK","USDSGD","USDHKD"],100000,"Forex","1 lot = 100.000 birim"),

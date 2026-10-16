@@ -14,13 +14,11 @@ const today=todayStamp(),week=weekStartStamp();
 const todayTrades=trades.filter(t=>ek(t).startsWith(today));
 const weekTrades=trades.filter(t=>ek(t)>=week);
 const todayNet=todayTrades.reduce((s,t)=>s+(pnl(t)??0),0);
-const weekSum=summarize(weekTrades),allSum=summarize(trades);
+const weekSum=summarize(weekTrades);
 const leak=topLeak(trades),best=bestSetup(trades);
 const adh=adherence(todayTrades.length?todayTrades:weekTrades);
 const recent=trades.filter(t=>t.exit!=null).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
 const opens=trades.filter(t=>t.exit==null).sort((a,b)=>a.date.localeCompare(b.date));
-const backupAge=state.lastBackupAt?Math.floor((Date.now()-state.lastBackupAt)/864e5):null;
-const showBackup=state.file!=="ok"&&(!state.lastBackupAt||(backupAge!=null&&backupAge>=7));
 return `<div class="stack">
 <header class="page-h"><p class="eyebrow">Bugün</p><h1>Özet</h1></header>
 ${state.memoryOnly?`<div class="card" style="font-size:15px;color:var(--muted)">Depolama kullanılamıyor. Veriler yalnızca bu oturumda durur.</div>`:""}
@@ -73,4 +71,3 @@ return `<div class="stack4">
 </div></div></details>
 <div id="tradeList">${tradesListHtml()}</div>
 </div>`}
-

@@ -1,7 +1,7 @@
 "use strict";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-const num=v=>{if(v==null||v==="")return null;if(typeof v==="number")return Number.isFinite(v)?v:null;let s=String(v).trim().replace(/[\s\u00a0\u202f']/g,"");if(s==="")return null;const c=s.lastIndexOf(","),d=s.lastIndexOf(".");if(c>=0&&d>=0){s=c>d?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"")}else if(c>=0){s=s.indexOf(",")!==c?s.replace(/,/g,""):s.replace(",",".")}else if(d>=0&&s.indexOf(".")!==d)s=s.replace(/\./g,"");const n=Number(s);return Number.isFinite(n)?n:null};
+const num=v=>{if(v==null||v==="")return null;if(typeof v==="number")return Number.isFinite(v)?v:null;let s=String(v).trim().replace(/[\s  ']/g,"");if(s==="")return null;const c=s.lastIndexOf(","),d=s.lastIndexOf(".");if(c>=0&&d>=0){s=c>d?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"")}else if(c>=0){s=s.indexOf(",")!==c?s.replace(/,/g,""):s.replace(",",".")}else if(d>=0&&s.indexOf(".")!==d)s=s.replace(/\./g,"");const n=Number(s);return Number.isFinite(n)?n:null};
 function money(n,d){d=d===undefined?2:d;if(n==null||Number.isNaN(n))return"—";const a=Math.abs(n).toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d});if(n>0)return"+"+a;if(n<0)return"−"+a;return a}
 function numF(n,d){if(n==null||Number.isNaN(n))return"—";return n.toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d})}
 function pct(n,d){if(n==null||Number.isNaN(n))return"—";return numF(n,d===undefined?1:d)+"%"}
@@ -17,3 +17,7 @@ const LDN=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"numeri
 function sessionOf(date){const d=new Date(date);if(Number.isNaN(d.getTime()))return"Belirsiz";const h=Number(LDN.format(d));if(h>=8&&h<13)return"Londra";if(h>=13&&h<17)return"Londra / NY";if(h>=17&&h<22)return"New York";return"Asya"}
 function weekdayOf(date){const d=new Date(date);if(Number.isNaN(d.getTime()))return"Belirsiz";return["Pazar","Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi"][d.getDay()]}
 
+// FIX(5): tarih damgası normalize — TR/ISO noktalı tarihler, çoklu boşluklar, saatsiz tarihler
+function toStamp(v){let s=String(v||"").trim();if(!s)return"";s=s.replace(/^(\d{2})\.(\d{2})\.(\d{4})/,"$3-$2-$1").replace(/^(\d{4})\.(\d{2})\.(\d{2})/,"$1-$2-$3").replace(/\s+/g,"T");if(/^\d{4}-\d{2}-\d{2}$/.test(s))s+="T00:00";return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)?s.slice(0,16):""}
+// CSV ayrıştırma (RFC 4180 — tırnaklı alanlar, kaçışlı tırnak)
+function parseCsv(text){const rows=[];let r=[],c="",q=false;for(let i=0;i<text.length;i++){const ch=text[i];if(q){if(ch==='"'){if(text[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}else if(ch==='"')q=true;else if(ch===","){r.push(c);c=""}else if(ch==="\n"){r.push(c);rows.push(r);r=[];c=""}else if(ch!=="\r")c+=ch}if(c!==""||r.length){r.push(c);rows.push(r)}return rows}

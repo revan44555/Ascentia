@@ -8,8 +8,9 @@ return `<div class="card"><p class="lbl">Düşüş eğrisi (zirveden uzaklık) �
 function monthRows(trades){const m=new Map();unitize(trades).filter(t=>pnl(t)!=null).forEach(t=>{const k=ek(t).slice(0,7),r=m.get(k)||{key:k,n:0,wins:0,net:0};r.n++;r.net+=pnl(t);if(pnl(t)>0)r.wins++;m.set(k,r)});return[...m.values()].sort((a,b)=>b.key.localeCompare(a.key)).map(r=>({...r,key:["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"][+r.key.slice(5)-1]+" "+r.key.slice(0,4),winRate:100*r.wins/r.n}))}
 function accRows(trades){return breakdown(trades,"acc").map(r=>({...r,key:(state.accounts.find(a=>a.id===r.key)||state.accounts[0]).name}))}
 
-function partialClose(id){const t=state.trades.find(x=>x.id===id);if(!t||t.exit!=null)return;const q=num(prompt("Kapatılacak miktar (açık: "+t.qty+")"));if(q==null||q<=0||q>=t.qty){toast("Miktar 0 ile "+t.qty+" arasında olmalı. Tamamını kapatmak için Kapat'ı kullan.");return}const p=num(prompt("Çıkış fiyatı"));if(p==null||p<=0)return;const now=nowLocal(),ch={...t,id:newId(),grp:t.grp||t.id,rt:null,chk:null,qty:q,exit:p,fees:0,exitDate:now<t.date?t.date:now},ve=validate(ch);if(ve){toast(ve);return}t.grp=ch.grp;t.qty=Math.round((t.qty-q)*1e8)/1e8;state.trades.push(ch);saveTrades(state.trades);toast("Kısmi kapatıldı: "+q+" @ "+p);render()}
-function insightsCard(trades){const nCl=trades.filter(t=>pnl(t)!=null).length;if(nCl<10)return nCl?`<div class="card"><p class="lbl">Bulgular</p><p class="subtle" style="margin-top:6px;font-size:14px">10 kapanmış işlemden sonra kalıp analizi burada görünür (şu an ${nCl}).</p></div>`:"";const out=[];const skip=r=>/^(Etiketsiz|Belirtilmemiş)$/.test(r.key);
+function insightsCard(trades){const nCl=trades.filter(t=>pnl(t)!=null).length;if(nCl<10)return nCl?`<div class="card"><p class="lbl">Bulgular</p><p class="subtle" style="margin-top:6px;font-size:14px">10 kapanmış işlemden sonra kalıp analizi burada görünür (şu an ${nCl}).</p></div>`:"";const out=[];
+// FIX(10): "Belirsiz" (geçersiz tarihli işlem) de bulgulara karışmaz
+const skip=r=>/^(Etiketsiz|Belirtilmemiş|Belirsiz)$/.test(r.key);
 const worst=(k,f,ok)=>{const w=breakdown(trades,k).filter(r=>r.n>=3&&!skip(r)&&(!ok||ok(r))).sort((a,b)=>a.net-b.net)[0];if(w&&w.net<0)out.push(f(w))};
 worst("mist",r=>"“"+r.key+"” hatasıyla "+r.n+" işlem: "+money(r.net));
 worst("emo",r=>r.key+" duygusuyla "+r.n+" işlem: "+money(r.net));
@@ -22,9 +23,10 @@ return out.length?`<div class="card"><p class="lbl">Bulgular</p><ul class="finds
 function barList(rows){const m=Math.max(1,...rows.map(r=>Math.abs(r.v)));return `<div class="bars">${rows.map(r=>`<div class="bar"><span>${esc(r.k)}</span><i><b class="${r.v>=0?"up":"dn"}" style="width:${Math.round(Math.abs(r.v)/m*100)}%"></b></i><em class="mono">${r.t}</em></div>`).join("")}</div>`}
 function distCards(trades){const cl=trades.filter(t=>pnl(t)!=null);const bins=[["< −2R",r=>r<-2],["−2 … −1R",r=>r>=-2&&r<-1],["−1 … 0R",r=>r>=-1&&r<0],["0 … 1R",r=>r>=0&&r<1],["1 … 2R",r=>r>=1&&r<=2],["> 2R",r=>r>2]];
 const rs=cl.map(rr).filter(v=>v!=null);const rb=bins.map(([k,f],i)=>{const n=rs.filter(f).length;return{k,v:i<3?-n:n,t:n}});
-const h=new Map();cl.forEach(t=>{const k=String(t.date||"").slice(11,13);if(!k)return;h.set(k,(h.get(k)||0)+pnl(t))});
+// FIX(15): saat dağılımı da diğer istatistiklerle tutarlı olarak çıkış zamanına (ek) göre
+const h=new Map();cl.forEach(t=>{const k=String(ek(t)||"").slice(11,13);if(!k)return;h.set(k,(h.get(k)||0)+pnl(t))});
 const hr=[...h.entries()].sort((a,b)=>a[0]-b[0]).map(([k,v])=>({k:k+":00",v,t:money(v,0)}));
-return `<div class="card"><p class="lbl">R dağılımı (işlem sayısı)</p>${rs.length?barList(rb):'<p class="muted">Stop girilmiş işlem yok.</p>'}</div><div class="card"><p class="lbl">Giriş saatine göre net</p>${barList(hr)}</div>`}
+return `<div class="card"><p class="lbl">R dağılımı (işlem sayısı)</p>${rs.length?barList(rb):'<p class="muted">Stop girilmiş işlem yok.</p>'}</div><div class="card"><p class="lbl">Kapanış saatine göre net</p>${barList(hr)}</div>`}
 function wkKey(){const d=new Date(),t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));const y=t.getUTCFullYear();return y+"-W"+Math.ceil(((t-Date.UTC(y,0,1))/864e5+1)/7)}
 const lsg=k=>{try{return localStorage.getItem(k)||""}catch(e){return""}},lss=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 const CHK=["Setup planıma uyuyor","Stop ve hedef belli","Risk limitimin içinde","Sakinim, acelem yok"];
@@ -113,4 +115,3 @@ ${breakdownTable("Gün",breakdown(trades,"weekday"))}
 ${breakdownTable("Tutma süresi",breakdown(trades,"hold").filter(r=>r.key!=="Belirsiz"))}</div></details>
 
 </div>`}
-
