@@ -30,7 +30,7 @@ ${state.memoryOnly?`<div class="card" style="font-size:15px;color:var(--muted)">
 ${best&&best.net>0?`<div class="rowline"><span>En iyi setup</span><span>${esc(best.key)} <span class="mono ${pnlClass(best.net)}">${money(best.net)}</span></span></div>`:""}
 ${leak?`<div class="rowline"><span>En büyük sızıntı</span><span>${esc(leak.key)} <span class="mono dn">${money(leak.net)}</span></span></div>`:""}
 </div></div>
-${propCard()}
+${quickEvalCard()}${propCard()}
 ${reviewCard()}
 ${opens.length?`<div class="gap2"><h2 class="h2t">Açık pozisyonlar (${opens.length})</h2>${opens.map(tradeCard).join("")}</div>`:""}
 <div class="sechead">
@@ -71,3 +71,13 @@ return `<div class="stack4">
 </div></div></details>
 <div id="tradeList">${tradesListHtml()}</div>
 </div>`}
+// FIX(19): son 72 saatte kapanan, değerlendirilmemiş işlem için hızlı duygu+not kartı
+function quickEvalCard(){
+const cut=new Date(Date.now()-72*36e5);
+const t=filterAccount(state.trades,state.filterAccountId).filter(x=>x.exit!=null&&x.qc==null&&new Date(ek(x))>cut).sort((a,b)=>ek(b).localeCompare(ek(a)))[0];
+if(!t)return"";
+return `<div class="card s3"><p class="sect-h">Anı değerlendir</p>
+<p class="subtle" style="font-size:14px">${esc(t.symbol)} işlemi kapanalı birkaç saat oldu — o sırada ne hissettin?</p>
+<div class="chips scroll">${state.tags.emos.map(x=>`<button type="button" aria-pressed="${qcEmo===x}" class="chip ${qcEmo===x?"on":"off"}" data-qcemo="${esc(x)}">${esc(x)}</button>`).join("")}</div>
+<textarea class="inp" rows="2" id="qcNote" placeholder="Bir cümleyle o anı anlat (isteğe bağlı)" aria-label="Anı notu">${esc(qcNote)}</textarea>
+<button type="button" class="btn lg primary" data-act="qcsave" data-id="${esc(t.id)}">Kaydet</button></div>`}

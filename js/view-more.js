@@ -12,6 +12,7 @@ const row=(h,t,v)=>`<a class="lrow" href="${h}"><span>${t}</span><span class="lv
 return `<div class="stack">${pageHead("Daha")}
 <div class="card bkc"><div><div class="bkt"><span class="dot ${bs.c}"></span>${bs.t}</div><div class="subtle bks">${bs.s}</div></div><button type="button" class="btn sm primary" data-act="jsonexport">Yedekle</button></div>
 <div class="card lgrp">${row("#/more/accounts","Hesaplar",state.accounts.length+" hesap")}${row("#/more/tags","Etiketler",nt+" etiket")}${row("#/more/data","Veri ve yedek","")}</div>
+${INSTALL_PROMPT?`<div class="card lgrp"><div class="lrow"><span>Uygulama</span><button type="button" class="btn sm primary" data-act="install">Ana ekrana yükle</button></div></div>`:""}
 <div class="card lgrp"><div class="lrow"><span>Görünüm</span><span class="sg"><button type="button" class="${state.theme==="dark"?"on":""}" data-act="theme" data-v="dark">Koyu</button><button type="button" class="${state.theme==="light"?"on":""}" data-act="theme" data-v="light">Açık</button></span></div></div>
 <p class="subtle foot">${state.trades.length} işlem · veriler yalnızca bu cihazda</p></div>`}
 
@@ -89,6 +90,7 @@ ${t.emo?row("Duygu",esc(t.emo)):""}
 ${t.mist?row("Hata",esc(t.mist)):""}
 ${t.rt?row("İşlem puanı",t.rt+" ★"):""}
 ${t.notes?`<div style="margin-top:8px"><p class="lbl">Not</p><p style="margin-top:4px;font-size:15px;white-space:pre-wrap">${esc(t.notes)}</p></div>`:""}
+${t.img?`<div style="margin-top:10px"><p class="lbl">Görsel</p><img src="${t.img}" alt="İşlem grafiği" style="width:100%;border-radius:10px;display:block;margin-top:6px"></div>`:""}
 </div></div>
 <div class="card"><p class="lbl">Hesap</p><div class="divide" style="margin-top:8px">
 ${row("Hesap",esc(a?a.name:"—"))}

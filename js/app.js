@@ -1,4 +1,5 @@
 "use strict";
+let qcEmo="",qcNote="";
 function parseHash(){const h=location.hash.slice(1)||"/",q=h.split("?");const path=q[0]||"/";const params={};if(q[1])q[1].split("&").forEach(p=>{const[k,v]=p.split("=");params[k]=decodeURIComponent(v||"")});return{path,params}}
 const navKey=p=>p.startsWith("/trades")?"/trades":p;
 
@@ -33,10 +34,12 @@ const q0=form.qty;applySym(sym);form.qty=q0;
 const now=nowLocal();
 const ex0=form.exit===""||form.exit==null?null:num(form.exit);
 // FIX(12): çıkış yoksa "plana uydu" etiketi kaydedilmez
-const rec={id:form.id||newId(),date:form.date||now,symbol:sym,dir:form.dir,entry:num(form.entry),exit:ex0,qty:num(form.qty),mult:num(form.mult)||1,acc:form.acc||"",plan:ex0!=null?form.plan:"",mist:form.mist||"",stop:form.stop===""?null:num(form.stop),stop0:form.stop0===""?null:num(form.stop0),tp:form.tp===""?null:num(form.tp),fees:num(form.fees)||0,fx:num(form.fx)>0?num(form.fx):1,exitDate:form.exitDate||"",setup:form.setup||"",emo:form.emo||"",notes:form.notes||"",rt:num(form.rt)};
+const rec={id:form.id||newId(),date:form.date||now,symbol:sym,dir:form.dir,entry:num(form.entry),exit:ex0,qty:num(form.qty),mult:num(form.mult)||1,acc:form.acc||"",plan:ex0!=null?form.plan:"",mist:form.mist||"",stop:form.stop===""?null:num(form.stop),stop0:form.stop0===""?null:num(form.stop0),tp:form.tp===""?null:num(form.tp),fees:num(form.fees)||0,fx:num(form.fx)>0?num(form.fx):1,exitDate:form.exitDate||"",setup:form.setup||"",emo:form.emo||"",notes:form.notes||"",rt:num(form.rt),img:form.img||""};
 const old0=form.id?state.trades.find(t=>t.id===form.id):null;
-const cv=(v=>{try{return JSON.parse(localStorage.getItem("tj_chk_"+new Date().toISOString().slice(0,10))||"[]")}catch(e){return[]}})();
-rec.chk=old0?old0.chk:(cv?cv.filter(x=>x==="1").length:null);
+rec.qc=old0?(old0.qc||0):(form.qc||0);
+let chkToday=null;
+try{const s0=localStorage.getItem("tj_chk_"+new Date().toISOString().slice(0,10));if(typeof s0==="string"&&s0.length)chkToday=[...s0].filter(c=>c==="1").length}catch(e){}
+rec.chk=old0?old0.chk:chkToday;
 if(old0&&old0.grp)rec.grp=old0.grp;
 const qc=QCUR[sym]||(SYMS.find(x=>x[0]===sym)&&SYMS.find(x=>x[0]===sym)[2]==="Forex"&&!sym.endsWith("USD")?sym.slice(3,6):"");
 if(qc&&rec.fx===1&&ex0!=null){showFormErr("P&L kuru gerekli ("+qc+" → "+(state.prefsCur||"USD")+"). Gelişmiş → P&L kuru alanına gir.");return}
@@ -60,7 +63,7 @@ const head=["tarih","sembol","yon","hacim","giris","kapanis","komisyon","swap","
 const lines=[head.join(",")];
 trades.forEach(t=>{lines.push([q(formatWhen(t.date)),q(t.symbol),t.dir,q(t.qty),q(t.entry),q(t.exit),q(t.fees||""),q(t.swap||""),q(t.tp),q(t.stop),q(t.stop0),q(t.exitDate?formatWhen(t.exitDate):""),q(t.mult||1),q(t.fx||1),q(pnl(t)),q(rr(t)!=null?Math.round(rr(t)*100)/100:""),q(t.setup),q(t.emo),q(t.mist),q(t.plan),q(t.rt||""),q(t.chk==null?"":t.chk),q(t.notes),q((accountOf(t)||{}).name||"")].join(","))});
 return lines.join("\n")}
-function downloadText(name,text,mime){const b=new Blob([mime==="text/csv"?"\uFEFF"+text:text],{type:mime||"text/plain"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+function downloadText(name,text,mime){const b=new Blob([mime==="text/csv"?"﻿"+text:text],{type:mime||"text/plain"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
 function markBackup(){state.lastBackupAt=Date.now();saveBackupStamp(String(Date.now()))}
 
 document.getElementById("view").addEventListener("click",e=>{
@@ -72,6 +75,7 @@ if(actEl.dataset.qx!==undefined&&form.date){const m=+actEl.dataset.qx,b=new Date
 if(actEl.dataset.facc!==undefined){state.filterAccountId=actEl.dataset.facc;render();return}
 if(actEl.dataset.rng!==undefined){RANGE=actEl.dataset.rng;render();return}
 if(actEl.dataset.lchip!==undefined){const[k,v]=actEl.dataset.lchip.split(":");listState[k]=listState[k]===v?"":v;const tl=$("#tradeList");if(tl)tl.innerHTML=tradesListHtml();document.querySelectorAll("[data-lchip]").forEach(c=>{const[a,b]=c.dataset.lchip.split(":");c.classList.toggle("on",listState[a]===b);c.setAttribute("aria-pressed",listState[a]===b)});return}
+if(actEl.dataset.qcemo!==undefined){qcEmo=qcEmo===actEl.dataset.qcemo?"":actEl.dataset.qcemo;render();return}
 if(actEl.dataset.chip!==undefined&&form){const k=actEl.dataset.chip,v=actEl.dataset.v;
 if(k==="acc"||k==="dir"){form[k]=v;render();return}
 if(form[k]===v&&actEl.dataset.off!=="0"){form[k]=""}else form[k]=v;
@@ -80,6 +84,9 @@ return}
 if(actEl.dataset.sym!==undefined){applySym(actEl.dataset.sym);render();return}
 const act=actEl.dataset.act;if(!act)return;
 if(act==="save"){saveForm();return}
+if(act==="qcsave"){const t0=state.trades.find(x=>x.id===actEl.dataset.id);if(!t0)return;if(qcEmo)t0.emo=qcEmo;const n=((document.getElementById("qcNote")||{}).value||"").trim();if(n)t0.notes=t0.notes?t0.notes+"\n"+n:n;t0.qc=1;qcEmo="";qcNote="";saveTrades(state.trades);toast("Değerlendirme kaydedildi");render();return}
+if(act==="imgdel"){if(form)form.img="";render();return}
+if(act==="install"){if(!INSTALL_PROMPT)return;INSTALL_PROMPT.prompt();INSTALL_PROMPT=null;render();return}
 if(act==="togglemore"){moreOpen=!moreOpen;render();return}
 if(act==="theme"){state.theme=actEl.dataset.v;saveTheme(state.theme);document.documentElement.classList.add("tx");applyTheme();setTimeout(()=>document.documentElement.classList.remove("tx"),400);render();return}
 if(act==="jsonexport"){const j=backupJson();markBackup();if(navigator.share){const f=new File([j],"ascentia-defter.json",{type:"application/json"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Ascentia yedek"}).catch(()=>{});render();return}}downloadText("ascentia-defter.json",j,"application/json");toast("Yedek indirildi");render();return}
@@ -121,6 +128,7 @@ t.exit=p;t.exitDate=nowLocal()<t.date?t.date:nowLocal();saveTrades(state.trades)
 
 document.getElementById("view").addEventListener("input",e=>{
 const t=e.target;if(!t.dataset)return;
+if(t.id==="qcNote"){qcNote=t.value;return}
 if(t.dataset.lq!==undefined){listState.q=t.value;const tl=$("#tradeList");if(tl)tl.innerHTML=tradesListHtml();return}
 if(t.dataset.newtag!==undefined||t.dataset.newacc!==undefined||t.dataset.aid!==undefined){
 // FIX(8): hesap alanları her tuşta IndexedDB'ye yazmaz — 400 ms debounce
@@ -146,6 +154,9 @@ if(f==="stop"||f==="stop0"||f==="tp"||f==="qty"||f==="mult"||f==="fx"||f==="entr
 
 document.getElementById("view").addEventListener("change",e=>{
 const t=e.target;
+if(t.dataset&&t.dataset.file==="img"){const f=t.files[0];t.value="";if(!f)return;
+if(!/^image\//.test(f.type)){toast("Görsel dosyası seç","err");return}
+imgPrep(f).then(u=>{if(!form)return;form.img=u;render();toast("Görsel eklendi")}).catch(()=>toast("Görsel eklenemedi (çok büyük olabilir)","err"));return}
 if(t.dataset&&t.dataset.file!==undefined){const f=t.files[0];t.value="";if(!f)return;
 if(t.dataset.file==="csv"){f.text().then(txt=>{const st=importCsv(txt);state.trades=st.trades;saveTrades(state.trades);if(st.added){toast(st.added+" işlem içe aktarıldı"+(st.skipped?" · "+st.skipped+" atlandı":"")+(st.why?" ("+st.why+")":""));if(st.nofx)toast(st.nofx+" işlemde P&L kuru eksik — kapanmış sonuçlar bozuk olabilir","err")}else{toast("İçe aktarılamadı: "+(st.why||"satır bulunamadı"),"err")}}).catch(()=>toast("CSV okunamadı","err"));return}
 if(t.dataset.file==="json"){f.text().then(txt=>{let raw;try{raw=JSON.parse(txt)}catch(e2){toast("JSON okunamadı","err");return}
@@ -181,3 +192,7 @@ render()});
 window.addEventListener("storage",e=>{if(e.key!=="tj_ts")return;(async()=>{const t=await kvGet("trades"),a=await kvGet("accounts"),g=await kvGet("tags");if(Array.isArray(t))state.trades=t;if(Array.isArray(a)&&a.length)state.accounts=a;if(g&&typeof g==="object"&&!Array.isArray(g))state.tags=normTags(g);render()})()});
 
 (async()=>{await loadAll();await fileInit();render()})();
+// FIX(18): PWA — yüklenebilirlik + çevrimdışı (yalnızca gerçek tarayıcıda)
+let INSTALL_PROMPT=null;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();INSTALL_PROMPT=e;render()});
+if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol||""))window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
