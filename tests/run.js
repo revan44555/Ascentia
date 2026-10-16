@@ -23,7 +23,8 @@ function load(store) {
     console, setTimeout, clearTimeout, URLSearchParams, structuredClone,
     localStorage: {
       getItem: k => (k in store.ls ? store.ls[k] : null),
-      setItem: (k, v) => { if (store.lsFail.has(k)) throw new Error("quota"); store.ls[k] = String(v); store.log.push(k) }
+      setItem: (k, v) => { if (store.lsFail.has(k)) throw new Error("quota"); store.ls[k] = String(v); store.log.push(k) },
+      removeItem() {}, clear() {}
     },
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     indexedDB: {
@@ -59,17 +60,19 @@ function load(store) {
   vm.createContext(ctx);
   for (const f of FILES) {
     let src = fs.readFileSync(path.join(DIR, "js", f + ".js"), "utf8");
-    if (f === "app") src = src.replace(/\(async function init\(\)\{([\s\S]*?)\}\)\(\);/, "globalThis.__init=async function(){$1};");
+    // init IIFE'sini (her iki biçimi) nötralize et — testler kendi akışını kurar
+    src = src.replace(/\(async function init\(\)\{([\s\S]*?)\}\)\(\);/, "globalThis.__init=async function(){$1};");
+    src = src.replace(/\(async\(\)=>\{await loadAll\(\);await fileInit\(\);render\(\)\}\)\(\);/, "globalThis.__init=async()=>{await loadAll();await fileInit();render()};");
     vm.runInContext(src, ctx, { filename: f + ".js" });
   }
   const names = ["num", "pnl", "risk", "rr", "validate", "summarize", "breakdown", "adherence", "normTrade", "restoreJson", "importCsv", "loadAll",
-    "saveTrades", "saveAccounts", "saveTags", "state", "sessionOf", "monthRows", "partialClose", "tradesToCsv", "backupJson", "render", "accountId", "DEFAULT_TAGS", "TRADES_KEY", "unitize"];
+    "saveTrades", "saveAccounts", "saveTags", "state", "sessionOf", "monthRows", "applyPartial", "tradesToCsv", "backupJson", "render", "accountId", "DEFAULT_TAGS", "TRADES_KEY", "unitize",
+    "fixThou", "toStamp", "jsonmerge", "insightsCard", "distCards", "saveForm", "emptyForm", "fromTrade", "form"];
   const T = vm.runInContext("({" + names.map(n => `${n}:typeof ${n}!=='undefined'?${n}:undefined`).join(",") + "})", ctx);
   return { T, ctx, env, store };
 }
 
 // ---- mini test runner -------------------------------------------------------
-const results = [];
 const tests = [];
 const test = (id, name, fn) => tests.push({ id, name, fn });
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -136,7 +139,7 @@ test("1", "risk(): kâr tarafına çekilmiş stop sahte risk üretmez (null)", (
   expect(T.risk({ ...base, stop: 1.102 }) === null, "risk = " + T.risk({ ...base, stop: 1.102 }));
   expect(T.rr({ ...base, stop: 1.102 }) === null, "R sahte hesaplandı");
 });
-test("1", "CSV: S/L başabaşa çekilmiş MT5 satırı atlanmaz, R boş kalır", () => {
+test("1", "CSV: S/L başabaş çekilmiş MT5 satırı atlanmaz, R boş kalır", () => {
   const { T } = load(); withAcc(T);
   const csv = "Open Time,Symbol,Type,Volume,Open Price,S / L,T / P,Close Time,Close Price,Commission,Swap\n2026.10.01 10:00:00,EURUSD,buy,1,1.1000,1.1000,1.1100,2026.10.01 12:00:00,1.1050,-5,0\n";
   const r = T.importCsv(csv);
@@ -236,32 +239,33 @@ test("4", "Normal kaydet → yeniden aç (regresyon)", async () => {
 });
 
 // ===== 5) Kısmi kapatma ========================================================
-function partialSetup(T, env) {
+// FIX(3): kısmi kapatma artık prompt tabanlı partialClose yerine applyPartial çekirdeğinden
+function partialSetup(T) {
   withAcc(T);
   const parent = { ...base, id: "P", qty: 3, exit: null, exitDate: "", fees: 0, plan: "evet", rt: 4, chk: 3 };
   T.state.trades = [parent];
-  env.prompts.push("1", "1.11");            // 1 lot @ 1.11 → +1000
-  T.partialClose("P");
+  const err = T.applyPartial("P", 1, 1.11); // 1 lot @ 1.11 → +1000
+  if (err) throw new Error("applyPartial reddetti: " + err);
   const p = T.state.trades.find(t => t.id === "P"); p.exit = 1.098; p.exitDate = "2026-10-01T15:00"; // kalan 2 lot → −400
   return T.state.trades;
 }
 test("5", "Parçalı kapanış tek işlem sayılır (closed 1, win rate %100)", () => {
-  const { T, env } = load(); const ts = partialSetup(T, env);
+  const { T } = load(); const ts = partialSetup(T);
   const s = T.summarize(ts);
   expect(ts.length === 2 && s.closed === 1 && s.wins === 1 && s.losses === 0 && s.winRate === 100, `closed=${s.closed} wins=${s.wins} losses=${s.losses} winRate=${s.winRate}`);
 });
 test("5", "Net para değişmez (+1000 −400 = +600) ve R grup toplamı (600 / 1500 = 0,4R)", () => {
-  const { T, env } = load(); const ts = partialSetup(T, env);
+  const { T } = load(); const ts = partialSetup(T);
   const s = T.summarize(ts);
   expect(s.net === 600 && near(s.avgR, 0.4, 1e-6), `net=${s.net} avgR=${s.avgR}`);
 });
 test("5", "Dağılımlarda (setup) n = 1; aylık özette n = 1", () => {
-  const { T, env } = load(); const ts = partialSetup(T, env);
+  const { T } = load(); const ts = partialSetup(T);
   const b = T.breakdown(ts, "setup"), m = T.monthRows(ts);
   expect(b.length === 1 && b[0].n === 1 && b[0].net === 600 && m[0].n === 1 && m[0].net === 600, `breakdown n=${b[0] && b[0].n}, aylık n=${m[0] && m[0].n}`);
 });
 test("5", "Plan uyumu çift saymaz (tek işlem → <3 etiketli → null)", () => {
-  const { T, env } = load(); const ts = partialSetup(T, env);
+  const { T } = load(); const ts = partialSetup(T);
   const tagged = ts.filter(t => t.plan === "evet").length;
   expect(tagged === 2, "ön koşul");
   const base3 = [...ts, { ...base, id: "x1", plan: "hayır" }, { ...base, id: "x2", plan: "evet" }]; // gruplanınca 3 işlem: evet,hayır,evet
@@ -269,7 +273,7 @@ test("5", "Plan uyumu çift saymaz (tek işlem → <3 etiketli → null)", () =>
   expect(a !== null && near(a, 66.6667, 1e-3), "uyum = " + a + " (66,7 olmalı)");
 });
 test("5", "Çocuk kayıtta puan/kontrol listesi kopyalanmaz; grp ortak ve yedekten sonra korunur", () => {
-  const { T, env, ctx } = load(); const ts = partialSetup(T, env);
+  const { T } = load(); const ts = partialSetup(T);
   const child = ts.find(t => t.id !== "P"), parent = ts.find(t => t.id === "P");
   expect(child.rt === null && child.chk === null, "rt/chk kopyalandı");
   expect(parent.grp && parent.grp === child.grp, "grp yok/farklı");
@@ -279,9 +283,10 @@ test("5", "Çocuk kayıtta puan/kontrol listesi kopyalanmaz; grp ortak ve yedekt
   expect(g[0] && g[0] === g[1], "grp yedekte kayboldu");
 });
 test("5", "Kalan kısım açıkken: işlem 'açık' sayılır, gerçekleşen kâr net'e girer", () => {
-  const { T, env } = load(); withAcc(T);
+  const { T } = load(); withAcc(T);
   T.state.trades = [{ ...base, id: "P", qty: 3, exit: null, exitDate: "", fees: 0 }];
-  env.prompts.push("1", "1.11"); T.partialClose("P");
+  const err = T.applyPartial("P", 1, 1.11);
+  expect(err === null, "reddedildi: " + err);
   const s = T.summarize(T.state.trades);
   expect(s.closed === 0 && s.open === 1 && s.net === 1000, `closed=${s.closed} open=${s.open} net=${s.net}`);
 });
@@ -291,9 +296,17 @@ test("5", "Parçasız normal işlemler aynı kalır (2 işlem = 2)", () => {
   const s = T.summarize(ts);
   expect(s.closed === 2 && s.wins === 1 && s.losses === 1 && T.breakdown(ts, "setup")[0].n === 2, "sayım");
 });
-
+test("5", "applyPartial hatalı miktar reddeder (0, eksi, tamamından fazla)", () => {
+  const { T } = load(); withAcc(T);
+  T.state.trades = [{ ...base, id: "P", qty: 3, exit: null, exitDate: "", fees: 0 }];
+  expect(typeof T.applyPartial("P", 0, 1.11) === "string", "0 kabul edildi");
+  expect(typeof T.applyPartial("P", -1, 1.11) === "string", "negatif kabul edildi");
+  expect(typeof T.applyPartial("P", 5, 1.11) === "string", "fazla miktar kabul edildi");
+  expect(typeof T.applyPartial("P", 3, 1.11) === "string", "tamamı kısmi sayıldı");
+  expect(T.state.trades.length === 1, "hatalı denemeler kayıt ekledi");
+});
 test("5", "Formdan Düzenle→Kaydet: grp korunur, oynatılmış stop'lu kapanmış işlem kaydedilir (uçtan uca)", () => {
-  const { T, ctx, env } = load(); partialSetup(T, env);
+  const { T, ctx } = load(); partialSetup(T);
   vm.runInContext('form=fromTrade(state.trades.find(t=>t.id==="P"));form.__for="/add";form.stop="1.102";', ctx);
   ctx.saveForm();
   const p = T.state.trades.find(t => t.id === "P");
@@ -325,6 +338,103 @@ test("6", "Yalnız tarih (2026.10.01) olan satır 00:00 ile kabul edilir", () =>
   const { T } = load(); withAcc(T);
   const r = T.importCsv("Date,Symbol,Type,Volume,Open Price,Close Price\n2026.10.01,EURUSD,buy,1,1.1000,1.1050\n");
   expect(r.added === 1 && T.state.trades[0].date === "2026-10-01T00:00", JSON.stringify([r, T.state.trades[0] && T.state.trades[0].date]));
+});
+
+// ===== F) Düzeltme regresyonları ===============================================
+test("F1", "Enter tuşu: tek keydown handler (odak geçişi + son alanda kaydetme çakışmaz)", () => {
+  const src = fs.readFileSync(path.join(DIR, "js", "app.js"), "utf8");
+  const n = (src.match(/addEventListener\("keydown"/g) || []).length;
+  expect(n === 1, "keydown handler sayısı = " + n + " (1 olmalı)");
+  expect(!/all\[i\+1\]\)?\.focus\(\);else e\.target\.blur\(\)\}return\}\s*\n?.*addEventListener\("keydown"/s.test(src), "çift handler kalıntısı var");
+});
+test("F2", "JSON geri yükleme hesap limitlerini korur (dl/md/cur kaybolmaz)", () => {
+  const { T } = load();
+  T.restoreJson({ trades: [{ ...base }], accounts: [{ id: "a1", name: "Ana", balance: 10000, dl: 200, md: 6, cur: "EUR" }] }, true);
+  const a = T.state.accounts[0];
+  expect(a.dl === 200 && a.md === 6 && a.cur === "EUR", "dl/md/cur: " + JSON.stringify([a.dl, a.md, a.cur]));
+});
+test("F2", "jsonmerge hesap limitlerini korur", () => {
+  const { T } = load();
+  T.state.accounts = [{ id: "a1", name: "Ana", balance: 100, dl: 50, md: 3, cur: "" }];
+  const r = T.jsonmerge({ trades: [{ ...base, id: "M1", exit: null, exitDate: "" }], accounts: [{ id: "a2", name: "İkinci", balance: 5, dl: 10, md: 2, cur: "TRY" }] });
+  const a2 = T.state.accounts.find(a => a.name === "İkinci");
+  expect(r.added === 1 && a2 && a2.dl === 10 && a2.md === 2 && a2.cur === "TRY", JSON.stringify([r, a2]));
+});
+test("F4", "Yarım kalmış düzenleme taslaktan geri yüklenir", () => {
+  const { T, ctx } = load(); withAcc(T);
+  T.state.trades = [{ ...base, id: "P", notes: "eski not" }];
+  ctx.localStorage.setItem("tj_draft", JSON.stringify({ ...base, id: "P", __editId: "P", notes: "yeni not", symbol: "NAS100" }));
+  ctx.location.hash = "#/add?id=P";
+  ctx.render();
+  const f = vm.runInContext("form", ctx);
+  expect(f && f.notes === "yeni not" && f.id === "P" && f.symbol === "NAS100", "form: " + JSON.stringify(f && { notes: f.notes, id: f.id, symbol: f.symbol }));
+  expect(f.date === "2026-10-01T10:00", "tarih ezildi: " + f.date);
+});
+test("F4", "Yeni işlem sayfası düzenleme taslağını 'yeni' sayar (id taşınmaz)", () => {
+  const { T, ctx } = load(); withAcc(T);
+  T.state.trades = [{ ...base, id: "P", notes: "eski not" }];
+  ctx.localStorage.setItem("tj_draft", JSON.stringify({ ...base, id: "P", __editId: "P", notes: "yeni not" }));
+  ctx.location.hash = "#/add";
+  ctx.render();
+  const f = vm.runInContext("form", ctx);
+  expect(f && f.__editId == null && f.id === undefined && f.notes === "yeni not", "form: " + JSON.stringify(f && { eid: f.__editId, id: f.id, notes: f.notes }));
+});
+test("F5", "toStamp: çoklu boşluklu ve TR noktalı tarihler normalize edilir", () => {
+  const { T } = load();
+  expect(T.toStamp("2026.10.01  10:00:00") === "2026-10-01T10:00", T.toStamp("2026.10.01  10:00:00"));
+  expect(T.toStamp("01.10.2026 10:00") === "2026-10-01T10:00", T.toStamp("01.10.2026 10:00"));
+  expect(T.toStamp("2026-10-01 10:00") === "2026-10-01T10:00", T.toStamp("2026-10-01 10:00"));
+  expect(T.toStamp("") === "" && T.toStamp("günün biri") === "", "boş/geçersiz");
+});
+test("F5", "normTrade çoklu boşluklu tarihi de kabul eder", () => {
+  const { T } = load();
+  const t = T.normTrade({ ...base, date: "2026-10-01   10:00", exitDate: "2026-10-01   12:00" });
+  expect(t.date === "2026-10-01T10:00" && t.exitDate === "2026-10-01T12:00", t.date + " / " + t.exitDate);
+});
+test("F6", "Negatif stop reddedilir (LONG açık işlemde sahte risk üretmezdi)", () => {
+  const { T } = load(); withAcc(T);
+  expect(typeof T.validate({ ...base, exit: null, exitDate: "", stop: -1 }) === "string", "negatif stop kabul edildi");
+  expect(typeof T.validate({ ...base, stop0: -0.5 }) === "string", "negatif stop0 kabul edildi");
+  expect(typeof T.validate({ ...base, dir: "SHORT", tp: -2 }) === "string", "negatif hedef kabul edildi");
+  expect(T.validate({ ...base }) === null, "geçerli işlem reddedildi");
+});
+test("F7", "fixThou: bilinmeyen sembolde de binlik ayracı tutarlı (21.500 → 21500)", () => {
+  const { T } = load();
+  expect(T.fixThou("NAS100", "21.500") === "21500", "bilinen endeks bozuldu");
+  expect(T.fixThou("BIST100", "21.500") === "21500", "bilinmeyen semboldü 21.5 oldu: " + T.fixThou("BIST100", "21.500"));
+  expect(T.fixThou("EURUSD", "1.084") === "1.084", "bilinen forex bozuldu");
+  expect(T.fixThou("EURUSD", "1.0842") === "1.0842", "ondalık bozuldu");
+});
+test("F10", "Bulgular 'Belirsiz' seansını listelemez", () => {
+  const { T } = load(); withAcc(T);
+  T.state.trades = Array.from({ length: 10 }, (_, i) => ({ ...base, id: "s" + i, date: "bozuk", exit: 1.09, exitDate: "" }));
+  const html = T.insightsCard(T.state.trades) || "";
+  expect(!html.includes("Belirsiz seansında"), "Belirsiz seans bulguya girdi");
+});
+test("F12", "Çıkışı olmayan işlemde plan etiketi kaydedilmez", () => {
+  const { T, ctx } = load(); withAcc(T);
+  vm.runInContext('form=emptyForm();form.symbol="EURUSD";form.entry="1.1";form.qty="1";form.stop="1.095";form.plan="evet";form.__for="/add";', ctx);
+  ctx.saveForm();
+  expect(T.state.trades.length === 1 && T.state.trades[0].plan === "", JSON.stringify(T.state.trades[0] && T.state.trades[0].plan));
+});
+test("F12", "Çıkışı olan işlemde plan etiketi korunur", () => {
+  const { T, ctx } = load(); withAcc(T);
+  vm.runInContext('form=emptyForm();form.symbol="EURUSD";form.entry="1.1";form.qty="1";form.stop="1.095";form.exit="1.105";form.plan="evet";form.__for="/add";', ctx);
+  ctx.saveForm();
+  expect(T.state.trades.length === 1 && T.state.trades[0].plan === "evet", JSON.stringify(T.state.trades[0] && T.state.trades[0].plan));
+});
+test("F14", "Kur uyarısı yalnızca bu aktarımda eklenen işlemler için sayılır", () => {
+  const { T } = load(); withAcc(T);
+  const csv = HDR + "2026.10.01 10:00:00,EURJPY,buy,1,158.00,157.50,159.00,2026.10.01 12:00:00,158.50,-5,0\n";
+  const r1 = T.importCsv(csv);
+  expect(r1.added === 1 && r1.nofx === 1, "ilk aktarım: " + JSON.stringify(r1));
+  const r2 = T.importCsv(csv); // aynı satır → mükerrer, eklenmez
+  expect(r2.added === 0 && r2.nofx === 0, "ikinci aktarımda nofx=" + r2.nofx + " (0 olmalı)");
+});
+test("F15", "Saat dağılımı kartı çıkış zamanına göre etiketlenir", () => {
+  const { T } = load(); withAcc(T);
+  const html = T.distCards([base, { ...base, id: "2", exit: 1.09, exitDate: "2026-10-02T12:00" }]) || "";
+  expect(html.includes("Kapanış saatine göre net"), "etiket bulunamadı");
 });
 
 // ---- çalıştır ----------------------------------------------------------------
