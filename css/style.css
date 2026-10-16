@@ -186,7 +186,7 @@ table.tbl{width:100%;font-size:var(--fs-sm);border-collapse:collapse}
 .empty-hero .sub{margin-top:var(--sp-3);color:var(--muted)}
 .empty-hero .acts{margin-top:32px;display:flex;flex-direction:column;gap:var(--sp-2)}
 .mark{display:block;width:120px;height:40px;margin:0 auto 14px;color:var(--accent)}
-.mark path{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.mark path{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 
 .nw{white-space:nowrap}
 .sechead{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin-bottom:calc(var(--sp-2)*-1)}
@@ -238,7 +238,7 @@ nav.bottom a.add{color:var(--fg)}
 .enter .draw{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .5s forwards}
 .enter .eqfill{animation:fadein .9s .1s backwards}
 html.tx,html.tx *{transition:background-color .35s,color .35s,border-color .35s,box-shadow .35s}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media(prefers-reduced-motion:reduce){*,*::before,*:after{animation:none!important;transition:none!important}}
 
 /* --- usability pass --- */
 .actrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
