@@ -437,6 +437,13 @@ test("F15", "Saat dağılımı kartı çıkış zamanına göre etiketlenir", ()
   expect(html.includes("Kapanış saatine göre net"), "etiket bulunamadı");
 });
 
+// ===== Yama 17-20 regresyon testleri (5) =====================================
+test("F17","chk: kontrol listesi '1111' saveForm'u patlatmaz, chk=4",()=>{const{T,ctx}=load();withAcc(T);ctx.localStorage.setItem("tj_chk_"+new Date().toISOString().slice(0,10),"1111");vm.runInContext('form=emptyForm();form.symbol="EURUSD";form.entry="1.1";form.qty="1";form.stop="1.095";form.exit="1.105";form.__for="/add";',ctx);ctx.saveForm();expect(T.state.trades.length===1&&T.state.trades[0].chk===4,"chk="+(T.state.trades[0]&&T.state.trades[0].chk))});
+test("PWA","manifest geçerli, ikonlar ve maskable mevcut",()=>{const m=JSON.parse(fs.readFileSync(path.join(DIR,"manifest.json"),"utf8"));expect(m.display==="standalone"&&Array.isArray(m.icons)&&m.icons.some(i=>i.purpose==="maskable"),"manifest alanları");for(const ic of m.icons)expect(fs.existsSync(path.join(DIR,ic.src)),"ikon yok: "+ic.src)});
+test("PWA","sw.js sözdizimi geçerli, install/fetch handlerları var",()=>{const s=fs.readFileSync(path.join(DIR,"sw.js"),"utf8");new vm.Script(s);expect(/install/.test(s)&&/fetch/.test(s)&&/caches\.open/.test(s),"handler eksik")});
+test("QC","son kapanan işlem için anı kartı çıkar; qc=1 olunca kalkar",()=>{const{T,ctx}=load();withAcc(T);const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());const iso=n.toISOString().slice(0,16);T.state.trades=[{...base,id:"Q1",date:iso,exitDate:iso}];let h=vm.runInContext("viewHome()",ctx);expect(/Anı değerlendir/.test(h)&&/data-act="qcsave"/.test(h),"kart yok");T.state.trades[0].qc=1;h=vm.runInContext("viewHome()",ctx);expect(!/Anı değerlendir/.test(h),"kart hâlâ var")});
+test("IMG","görsel dataURL kaydedilir, normTrade ve yedekten korunur",()=>{const{T,ctx}=load();withAcc(T);const u="data:image/jpeg;base64,/9j/test";vm.runInContext('form=emptyForm();form.symbol="EURUSD";form.entry="1.1";form.qty="1";form.stop="1.095";form.exit="1.105";form.img="'+u+'";form.__for="/add";',ctx);ctx.saveForm();const t=T.state.trades[0];expect(t.img===u,"img kaydedilmedi");expect(T.normTrade(JSON.parse(JSON.stringify(t))).img===u,"normTrade düşürdü");T.restoreJson({trades:[JSON.parse(JSON.stringify(t))],accounts:[{id:"a1",name:"A",balance:0}]},true);expect(T.state.trades[0].img===u,"restore kaybetti")});
+
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {
   console.log("Repo: " + DIR + "\n");
