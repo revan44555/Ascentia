@@ -42,9 +42,9 @@ state.lastBackupAt=Number(lsGet(BACKUP_KEY)||0)||null;
 try{if(navigator.storage&&navigator.storage.persisted){state.durable=await navigator.storage.persisted();if(!state.durable&&navigator.storage.persist)navigator.storage.persist().then(v=>{state.durable=v}).catch(()=>{})}}catch(e){}
 applyTheme();
 }
-function applyTheme(){document.documentElement.classList.toggle("light",state.theme==="light");document.documentElement.classList.toggle("dark",state.theme!=="light");const tc=document.querySelector("meta[name=theme-color]");if(tc)tc.content=state.theme==="light"?"#f4f1ea":"#0c0c0e"}
+// DEĞİŞİKLİK (iOS): theme-color artık iOS arka plan renkleriyle eşleşiyor
+function applyTheme(){document.documentElement.classList.toggle("light",state.theme==="light");document.documentElement.classList.toggle("dark",state.theme!=="light");const tc=document.querySelector("meta[name=theme-color]");if(tc)tc.content=state.theme==="light"?"#F2F2F7":"#000000"}
 
-// FIX(2): hesap limitleri (dl/md/cur) yedekten geri yüklenir — eski yedeklerde yoksa 0/boş
 function restoreJson(raw,silent){if(!raw||!Array.isArray(raw.accounts)||!Array.isArray(raw.trades))return null;
 if(!silent&&state.trades.length){const n=(raw.trades||[]).length;if(!confirm(n+" işlemli yedek yüklenecek ve mevcut defterin ÜZERİNE yazılacak.\n\nÖnce mevcut defteri yedeklemek istersen şimdi iptal edip 'Yedekle'yi kullan."))return null}
 state.accounts=raw.accounts.map(a=>({id:String(a.id),name:String(a.name||"Hesap"),balance:num(a.balance)||0,dl:num(a.dl)||0,md:num(a.md)||0,cur:a.cur?String(a.cur).toUpperCase():""}));
@@ -59,6 +59,7 @@ const seen=new Set(state.trades.map(key));
 let added=0,skipped=0;
 for(const x of raw.trades){const t=normTrade(x);if(!t){skipped++;continue}const ac=find(x.account||x.acc)||(x.account?null:accs[0]);if(!ac){skipped++;continue}t.acc=ac.id;const k=key(t);if(seen.has(k)){skipped++;continue}seen.add(k);state.trades.push(t);added++}
 state.accounts=accs;saveAccounts(accs);saveTrades(state.trades);return{added,skipped}}
+// FIX(2): hesap limitleri (dl/md/cur) yedekten geri yüklenir — eski yedeklerde yoksa 0/boş
 function importCsv(text){const rows=parseCsv(text);if(rows.length<2)return{added:0,skipped:0,why:"CSV boş görünüyor",nofx:0,trades:state.trades};
 const h=rows[0].map(x=>String(x).trim().toLocaleLowerCase("tr")),AL={tarih:["open time","date","time","zaman","tarih_saat","datetime"],dcs:["type","direction","side","yon","trend"],sembol:["symbol","ticker","enstruman","instrument","pair"],hacim:["volume","size","lot","lots","miktar","quantity","contract size"],giris:["open price","openprice","open","entry","price","acilis"],kapanis:["close price","closeprice","close","exit","cikis"],komisyon:["commission","fee","fees","komisyon"],swap:["swap"],tp:["t / p","tp","take profit","takeprofit","hedef","target"],sl:["s / l","sl","stop loss","stoploss","stop"]};
 const nn=num;
