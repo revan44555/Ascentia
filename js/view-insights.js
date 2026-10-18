@@ -1,7 +1,28 @@
 "use strict";
-function propStatus(){const td=todayStamp().slice(0,10);return state.accounts.filter(a=>a.dl>0||a.md>0).map(a=>{const cl=state.trades.filter(t=>accountId(t)===a.id&&pnl(t)!=null);const today=cl.filter(t=>ek(t).slice(0,10)===td).reduce((x,t)=>x+pnl(t),0);let eq=0,pk=0;byExit(cl).forEach(t=>{eq+=pnl(t);pk=Math.max(pk,eq)});return{name:a.name,dl:a.dl||0,used:Math.max(0,-today),md:a.md||0,dd:pk-eq}})}
-function propCard(){const st=propStatus();if(!st.length)return"";const bar=(u,l)=>{const p=Math.min(100,Math.round(u/l*100));return `<span class="mono ${p>=100?"dn":p>=80?"warn":""}">${numF(u,2)} / ${numF(l,0)} (%${p})</span>`};return `<div class="card"><p class="lbl">Hesap limitleri</p><div class="divide" style="margin-top:8px">${st.map(x=>(x.dl?`<div class="rowline"><span>${esc(x.name)} · günlük kayıp</span>${bar(x.used,x.dl)}</div>`:"")+(x.md?`<div class="rowline"><span>${esc(x.name)} · düşüş</span>${bar(x.dd,x.md)}</div>`:"")).join("")}</div></div>`}
-function limitBanner(){const b=propStatus().filter(x=>(x.dl&&x.used>=x.dl)||(x.md&&x.dd>=x.md));return b.length?`<div class="card" style="border-color:var(--dn)"><p class="dn">⚠ ${b.map(x=>esc(x.name)+": "+(x.dl&&x.used>=x.dl?"günlük kayıp limiti doldu":"maks. düşüş limitine ulaşıldı")).join(" · ")}</p></div>`:""}
+function propStatus(){
+const td=todayStamp().slice(0,10);
+return state.accounts.filter(a=>a.dl>0||a.md>0).map(a=>{
+ const cl=state.trades.filter(t=>accountId(t)===a.id&&pnl(t)!=null);
+ const today=cl.filter(t=>ek(t).slice(0,10)===td).reduce((x,t)=>x+pnl(t),0);
+ const balance=num(a.balance)||0;
+ let eq=balance,pk=balance,dd=balance>0?0:null;
+ if(dd!=null)byExit(cl).forEach(t=>{eq+=pnl(t);pk=Math.max(pk,eq);if(pk>0)dd=Math.max(dd,(pk-eq)/pk*100)});
+ return{name:a.name,dl:a.dl||0,used:Math.max(0,-today),md:a.md||0,dd};
+})
+}
+function propCard(){
+ const st=propStatus();if(!st.length)return"";
+ const bar=(u,l,percent=false)=>{
+  if(u==null)return '<span class="muted">Bakiye gerekli</span>';
+  const p=Math.min(100,Math.round(u/l*100));
+  return `<span class="mono ${p>=100?"dn":p>=80?"warn":""}">${numF(u,2)}${percent?"%":""} / ${numF(l,percent?2:0)}${percent?"%":""} (%${p})</span>`;
+ };
+ return `<div class="card"><p class="lbl">Hesap limitleri</p><div class="divide" style="margin-top:8px">${st.map(x=>(x.dl?`<div class="rowline"><span>${esc(x.name)} · günlük kayıp</span>${bar(x.used,x.dl)}</div>`:"")+(x.md?`<div class="rowline"><span>${esc(x.name)} · düşüş</span>${bar(x.dd,x.md,true)}</div>`:"")).join("")}</div></div>`;
+}
+function limitBanner(){
+ const b=propStatus().filter(x=>(x.dl&&x.used>=x.dl)||(x.md&&x.dd!=null&&x.dd>=x.md));
+ return b.length?`<div class="card" style="border-color:var(--dn)"><p class="dn">⚠ ${b.map(x=>esc(x.name)+": "+(x.dl&&x.used>=x.dl?"günlük kayıp limiti doldu":"maks. düşüş limitine ulaşıldı")).join(" · ")}</p></div>`:"";
+}
 
 function ddCard(trades){const cl=byExit(trades.filter(t=>pnl(t)!=null));if(cl.length<2)return"";let eq=0,pk=0;const dd=cl.map(t=>{eq+=pnl(t);pk=Math.max(pk,eq);return eq-pk}),mn=Math.min(...dd,-1e-9),W=640,H=110,X=i=>i/(dd.length-1)*W,Y=v=>6+(v/mn)*(H-12),d=dd.map((v,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)).join(" "),dt=t=>{const x=ek(t).slice(0,10).split("-");return x[2]+"."+x[1]+"."+x[0].slice(2)};
 return `<div class="card"><p class="lbl">Düşüş eğrisi (zirveden uzaklık) · en derin ${money(mn,2)}</p><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:110px;display:block;margin-top:8px"><path d="${d} L${W} 6 L0 6 Z" fill="var(--dn)" opacity=".16"/><path d="${d}" fill="none" stroke="var(--dn)" stroke-width="2" vector-effect="non-scaling-stroke"/><line x1="0" x2="${W}" y1="6" y2="6" stroke="var(--border)"/></svg><div class="bar" style="grid-template-columns:1fr auto;margin-top:6px"><span>${dt(cl[0])}</span><span>${dt(cl[cl.length-1])}</span></div></div>`}

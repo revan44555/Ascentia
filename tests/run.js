@@ -67,7 +67,7 @@ function load(store) {
   }
   const names = ["num", "pnl", "risk", "rr", "validate", "summarize", "breakdown", "adherence", "normTrade", "restoreJson", "importCsv", "loadAll",
     "saveTrades", "saveAccounts", "saveTags", "state", "sessionOf", "monthRows", "applyPartial", "tradesToCsv", "backupJson", "render", "accountId", "DEFAULT_TAGS", "TRADES_KEY", "unitize",
-    "fixThou", "toStamp", "jsonmerge", "insightsCard", "distCards", "saveForm", "emptyForm", "fromTrade", "form"];
+    "fixThou", "toStamp", "jsonmerge", "insightsCard", "propStatus", "propCard", "limitBanner", "distCards", "saveForm", "emptyForm", "fromTrade", "form"];
   const T = vm.runInContext("({" + names.map(n => `${n}:typeof ${n}!=='undefined'?${n}:undefined`).join(",") + "})", ctx);
   return { T, ctx, env, store };
 }
@@ -97,6 +97,16 @@ test("R", "Drawdown: +100,−300,+50,−100 → maxDD 350, %3,465, PF 0,375", ()
   const s = T.summarize(ts);
   expect(s.net === -250 && s.maxDd === 350 && near(s.ddPct, 3.4653, 1e-3) && near(s.profitFactor, 0.375), JSON.stringify([s.net, s.maxDd, s.ddPct, s.profitFactor]));
   expect(s.closed === 4 && s.wins === 2 && s.losses === 2 && s.streakWin === 1 && s.streakLoss === 1, "sayımlar");
+});
+test("R", "Prop-firm düşüş limiti yüzde olarak bakiye zirvesine göre hesaplanır", () => {
+  const { T } = load();
+  T.state.accounts = [{ id: "a1", name: "Ana", balance: 10000, dl: 0, md: 6 }];
+  const mk = (i, p) => ({ ...base, id: "prop" + i, date: "2026-10-0" + i + "T10:00", exitDate: "2026-10-0" + i + "T11:00", exit: base.entry + p / 100000, fees: 0, stop: null });
+  T.state.trades = [mk(1, 100), mk(2, -120)];
+  const s = T.propStatus()[0];
+  expect(near(s.dd, 20 / 10100 * 100, 1e-5), "dd%=" + s.dd + " (beklenen ≈0,198)");
+  expect(!T.limitBanner().includes("maks. düşüş"), "Yüzde limiti para tutarıyla karşılaştırıldı: " + T.limitBanner());
+  expect(T.propCard().includes("% /"), "Düşüş yüzdesinin birimi görünmüyor: " + T.propCard());
 });
 test("R", "stop0 varken R, ilk stop üzerinden hesaplanır", () => {
   const { T } = load(); withAcc(T);
@@ -323,6 +333,7 @@ test("6", "Pozitif swap maliyeti düşürür (komisyon −5, swap +2 → 3); neg
   T.importCsv(HDR + "2026.10.01 10:00:00,EURUSD,buy,1,1.1000,1.0950,1.1100,2026.10.01 12:00:00,1.1050,-5,2\n2026.10.02 10:00:00,EURUSD,buy,1,1.1000,1.0950,1.1100,2026.10.02 12:00:00,1.1050,-5,-1.5\n");
   const f = T.state.trades.map(t => t.fees);
   expect(eq(f, [3, 6.5]), "fees=" + JSON.stringify(f));
+  expect(eq(T.state.trades.map(t => t.exitDate), ["2026-10-01T12:00", "2026-10-02T12:00"]), "MT5 Close Time çıkış zamanına aktarılmadı: " + JSON.stringify(T.state.trades.map(t => t.exitDate)));
 });
 test("6", "Swap geliri komisyonu aşarsa komisyon negatife düşmez (0'a kenetlenir), satır atlanmaz", () => {
   const { T } = load(); withAcc(T);
