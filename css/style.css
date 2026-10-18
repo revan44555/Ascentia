@@ -495,7 +495,7 @@ a.block { color:inherit; }
   .hero { padding:27px 28px !important; }
   .hero .big { font-size:48px !important; }
   .home-actions { max-width:620px; }
-  nav.bottom { display:none; }
+  /* Keep bottom navigation visible on tablets until the desktop sidebar appears. */
 }
 @media(min-width:1024px) {
   aside.side { display:flex;position:fixed;inset:0 auto 0 0;z-index:40;width:232px;flex-direction:column;border-right:1px solid var(--border);background:color-mix(in srgb,var(--surface) 96%,transparent);padding:28px 15px; }
