@@ -102,7 +102,7 @@ test("R", "Prop-firm düşüş limiti yüzde olarak bakiye zirvesine göre hesap
   const { T } = load();
   T.state.accounts = [{ id: "a1", name: "Ana", balance: 10000, dl: 0, md: 6 }];
   const mk = (i, p) => ({ ...base, id: "prop" + i, date: "2026-10-0" + i + "T10:00", exitDate: "2026-10-0" + i + "T11:00", exit: base.entry + p / 100000, fees: 0, stop: null });
-  T.state.trades = [mk(1, 100), mk(2, -120)];
+  T.state.trades = [mk(1, 100), mk(2, -20)];
   const s = T.propStatus()[0];
   expect(near(s.dd, 20 / 10100 * 100, 1e-5), "dd%=" + s.dd + " (beklenen ≈0,198)");
   expect(!T.limitBanner().includes("maks. düşüş"), "Yüzde limiti para tutarıyla karşılaştırıldı: " + T.limitBanner());
