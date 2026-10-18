@@ -44,3 +44,10 @@ tests/run.js        Node tabanlı regresyon testleri (sahte DOM)
 
 ## Gizlilik
 Veri sunucuya gönderilmez. Analitik, izleme, çerez yok. Yedek dosyaları senin kontrolündedir.
+
+
+## Mobil odaklı görsel yenileme (v3)
+- Koyu evergreen + mineral lime renk sistemi ve açık tema eşlemesi.
+- Mobilde yüzen alt navigasyon, daha belirgin günlük P&L kartı ve ana ekranda hızlı işlem/analiz kısayolları.
+- İşlem formu, analiz, kartlar ve grafikler için daha tutarlı dokunma alanları, yüzeyler ve tipografik hiyerarşi.
+- PWA tema rengi ve service worker önbellek sürümü yenilendi.
