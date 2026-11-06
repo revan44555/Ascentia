@@ -88,6 +88,7 @@ if(act==="qcsave"){const t0=state.trades.find(x=>x.id===actEl.dataset.id);if(!t0
 if(act==="imgdel"){if(form)form.img="";render();return}
 if(act==="install"){if(!INSTALL_PROMPT)return;INSTALL_PROMPT.prompt();INSTALL_PROMPT=null;render();return}
 if(act==="togglemore"){moreOpen=!moreOpen;render();return}
+if(act==="hidepl"){try{localStorage.setItem("tj_hidepl",localStorage.getItem("tj_hidepl")==="1"?"0":"1")}catch(e){}render();return}
 if(act==="theme"){state.theme=actEl.dataset.v;saveTheme(state.theme);document.documentElement.classList.add("tx");applyTheme();setTimeout(()=>document.documentElement.classList.remove("tx"),400);render();return}
 if(act==="jsonexport"){const j=backupJson();markBackup();if(navigator.share){const f=new File([j],"ascentia-defter.json",{type:"application/json"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Ascentia yedek"}).catch(()=>{});render();return}}downloadText("ascentia-defter.json",j,"application/json");toast("Yedek indirildi");render();return}
 // FIX(11): csvexport yalnızca Veri sayfasındadır; ölü inRange koşulu kaldırıldı
