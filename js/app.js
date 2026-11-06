@@ -114,7 +114,7 @@ applySym(raw);render();return}
 if(act==="deltrade"){const id=actEl.dataset.id,t=state.trades.find(x=>x.id===id);if(!t)return;
 if(!typedConfirm("İşlem silinsin mi? ("+t.symbol+" "+formatWhen(t.date)+")"))return;
 const idx=state.trades.indexOf(t);state.trades.splice(idx,1);saveTrades(state.trades);location.hash="#/trades";
-toast("Silindi",null,2200,{label:"Geri al",fn:()=>{state.trades.splice(idx,0,t);saveTrades(state.trades);render()}});return}
+toast("Silindi",null,6000,{label:"Geri al",fn:()=>{state.trades.splice(idx,0,t);saveTrades(state.trades);render()}});return}
 if(act==="clone"){const t=state.trades.find(x=>x.id===actEl.dataset.id);if(!t)return;const c=fromTrade(t);delete c.id;form={...c,date:nowLocal(),__for:"/add"};location.hash="#/add";render();return}
 if(act==="clear"){if(!typedConfirm("TÜM veriler silinsin mi?"))return;
 const d=state.theme,f=state.fileName;try{localStorage.clear()}catch(e){}

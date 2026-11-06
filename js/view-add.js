@@ -25,7 +25,7 @@ const tr={id:"__new",dir:form.dir==="SHORT"?"SHORT":"LONG",entry:e,stop:st,qty:q
 const rk=st==null||m?null:risk(tr),rp=rk==null?null:riskPct(tr),rw=rk!=null&&t!=null&&!m?Math.abs(t-e)/Math.abs(e-st):null,pl=x!=null&&!m?pnl(tr):null;
 const c=(l,v,cl)=>`<div><span>${l}</span><b class="mono ${cl||""}">${v}</b></div>`;
 const nb=rk!=null&&rp==null?`<p class="subtle" style="font-size:13px;margin-top:8px">Risk % için Daha → Hesaplar'dan bakiye gir.</p>`:"";
-return err+`<div class="pv">${c("Risk",rk==null?"—":numF(rk,2))}${c("Risk %",rp==null?"—":numF(rp,2)+"%")}${c("Ödül/risk",rw==null?"—":"1 : "+numF(rw,1))}${c("Sonuç",pl==null?"—":money(pl),pl==null?"":pnlClass(pl))}</div>${nb}`}
+return err+`<div class="pv">${c("Risk",rk==null?"—":numF(rk,2))}${c("Risk %",rp==null?"—":numF(rp,2)+"%")}${c("Ödül/risk",rw==null?"—":"1:"+numF(rw,1))}${c("Sonuç",pl==null?"—":money(pl),pl==null?"":pnlClass(pl))}</div>${nb}`}
 function viewAdd(){
 const existing=form.id?state.trades.find(t=>t.id===form.id):null;
 return `<div class="stack4">

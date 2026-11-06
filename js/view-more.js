@@ -40,7 +40,7 @@ function viewMoreData(){const bs=backupStatus(),hasFS=typeof window.showSaveFile
 return `<div class="stack">${pageHead("Veri ve yedek",1)}
 <div class="card s3">
 <p class="sect-h">Yedek</p>
-<div class="acc-f"><span class="btn sm primary" style="cursor:pointer">JSON yedekle<input type="file" hidden></span><button type="button" class="btn sm secondary" data-act="jsonexport">Paylaş</button></div>
+<div class="acc-f"><button type="button" class="btn sm primary" data-act="jsonexport">JSON yedekle</button><button type="button" class="btn sm secondary" data-act="jsonexport">Paylaş</button></div>
 <p class="subtle" style="font-size:13px">${backupNote()}</p>
 <div class="acc-f"><button type="button" class="btn sm secondary" data-act="csvexport">CSV dışa aktar</button></div>
 </div>
@@ -65,7 +65,7 @@ const r=risk(t),p=pnl(t),by=byExit(state.trades.filter(x=>accountId(x)===account
 const row=(l,v)=>`<div class="rowline"><span>${l}</span><span>${v}</span></div>`;
 const longNote=t.qty*(t.mult||1)>=1e4?"Kontrat çarpanı eksik olabilir (ör. forex 100.000). Kontrol et.":"";
 const d=dcs(t.entry),closeCard=t.exit==null?`<div class="card s3"><p class="sect-h">Pozisyonu kapat</p>
-<div class="grid2">${fld("cx","Çıkış fiyatı")}<div><label class="fld"><span>Miktar (boş = tamamı)</span><input class="inp" id="cq" inputmode="decimal" placeholder="ör. 0.05"></label><p class="ferr" id="fe-cq" role="alert"></p></div></div>
+<div class="grid2"><div><label class="fld"><span>Çıkış fiyatı</span><input class="inp" id="cx" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="ör. 1.0880"></label><p class="ferr" id="fe-cx" role="alert"></p></div><div><label class="fld"><span>Miktar (boş = tamamı)</span><input class="inp" id="cq" inputmode="decimal" placeholder="ör. 0.05"></label><p class="ferr" id="fe-cq" role="alert"></p></div></div>
 <p class="subtle" style="font-size:13px">Açık miktar: ${numF(t.qty,2)} · Miktarı boş bırakırsan tamamı kapanır; daha küçük girersen kısmi kapanır.</p>
 <button type="button" class="btn lg primary" data-act="closetrade" data-id="${t.id}">Kapat</button></div>`:"";
 return `<div class="stack">
@@ -73,7 +73,7 @@ return `<div class="stack">
 <div class="card">
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h1 style="font-size:24px;font-weight:600;letter-spacing:-.03em">${esc(t.symbol)}</h1>${badge(t.dir==="LONG"?"Long":"Short",t.dir==="LONG"?"up":"dn")}${t.plan==="evet"?badge("plana uydu","up"):""}${t.plan==="hayır"?badge("plan dışı","dn"):""}${p!=null?badge(money(p),p>0?"up":p<0?"dn":"muted"):""}</div>
 <p class="subtle mono" style="margin-top:6px;font-size:13px">${esc(formatWhen(t.date))}${t.exitDate?" → "+esc(formatWhen(t.exitDate)):""}${holdMin(t)!=null?" · "+holdText(holdMin(t)):""}</p>
-${t.exit==null?`<div class="card" style="margin-top:12px;background:var(--elevated);box-shadow:none"><p class="lbl">Açık pozisyon</p><p class="mono" style="margin-top:4px;font-size:20px;font-weight:500">${esc(fmtPx(t.qty,2))} lot @ ${esc(fmtPx(t.entry,d))}</p>${r!=null?`<p class="muted" style="margin-top:4px;font-size:13px">Stop ${esc(fmtPx(t.stop,d))} · risk ${money(r)}${rp!=null?" ("+numF(rp,2)+"%)":""}</p>`:""}</div>`:`<div class="card" style="margin-top:12px;background:var(--elevated);box-shadow:none"><p class="lbl">Sonuç</p><p class="mono" style="margin-top:4px;font-size:20px;font-weight:500;${p!=null?"color:var(--"+pnlClass(p)+")":""}">${p==null?"—":money(p)}</p>${rr(t)!=null?`<p class="muted" style="margin-top:4px;font-size:13px">${rf(rr(t))} · risk ${r!=null?money(r):"—"}</p>`:""}</div>`}
+${t.exit==null?`<div class="card" style="margin-top:12px;background:var(--elevated);box-shadow:none"><p class="lbl">Açık pozisyon</p><p class="mono" style="margin-top:4px;font-size:20px;font-weight:500">${esc(fmtPx(t.qty,2))} lot @ ${esc(fmtPx(t.entry,d))}</p>${r!=null?`<p class="muted" style="margin-top:4px;font-size:13px">Stop ${esc(fmtPx(t.stop,d))} · risk ${numF(r,2)}${rp!=null?" ("+numF(rp,2)+"%)":""}</p>`:""}</div>`:`<div class="card" style="margin-top:12px;background:var(--elevated);box-shadow:none"><p class="lbl">Sonuç</p><p class="mono" style="margin-top:4px;font-size:20px;font-weight:500;${p!=null?"color:var(--"+pnlClass(p)+")":""}">${p==null?"—":money(p)}</p>${rr(t)!=null?`<p class="muted" style="margin-top:4px;font-size:13px">${rf(rr(t))} · risk ${r!=null?numF(r,2):"—"}</p>`:""}</div>`}
 </div>
 ${closeCard}
 <div class="card"><p class="lbl">İşlem bilgileri</p><div class="divide" style="margin-top:8px">
@@ -83,7 +83,7 @@ ${row("Miktar","<span class=\"mono\">"+esc(fmtPx(t.qty,2))+"</span>"+(t.mult&&t.
 ${t.stop!=null?row("Stop-loss","<span class=\"mono\">"+esc(fmtPx(t.stop,d))+"</span>"):""}
 ${t.stop0!=null?row("İlk stop","<span class=\"mono\">"+esc(fmtPx(t.stop0,d))+"</span>"):""}
 ${t.tp!=null?row("Hedef","<span class=\"mono\">"+esc(fmtPx(t.tp,d))+"</span>"):""}
-${t.fees?row("Komisyon","<span class=\"mono\">"+esc(money(t.fees))+"</span>"):""}
+${t.fees?row("Komisyon","<span class=\"mono\">"+esc(numF(t.fees,2))+"</span>"):""}
 ${t.fx&&t.fx!==1?row("Kur","<span class=\"mono\">"+esc(numF(t.fx,4))+"</span>"):""}
 ${t.setup?row("Setup",esc(t.setup)):""}
 ${t.emo?row("Duygu",esc(t.emo)):""}
