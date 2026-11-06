@@ -430,7 +430,7 @@ textarea.inp { min-height:90px;resize:vertical; }
 .dirbtn button.short.on { background:color-mix(in srgb,var(--dn) 12%,var(--surface));border-color:color-mix(in srgb,var(--dn) 38%,var(--border)); }
 .pv { padding:14px;border:1px solid color-mix(in srgb,var(--accent) 20%,var(--border));border-radius:16px;background:color-mix(in srgb,var(--accent) 5%,var(--surface));gap:14px; }
 .pv>div span { font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted); }
-.pv>div b { display:block;margin-top:5px;font-size:16px; }
+.pv>div b { display:block;margin-top:5px;font-size:16px;white-space:nowrap; }
 .dt,.dr { border-top:1px solid var(--border); }
 .dt summary,.dr summary { min-height:50px;font-size:13px;font-weight:700; }
 .filt { background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:0 14px;box-shadow:none; }
