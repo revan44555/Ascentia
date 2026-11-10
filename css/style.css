@@ -538,3 +538,13 @@ button.home-settings { font:inherit;cursor:pointer; }
 .plan-cta { color:var(--accent);text-decoration:underline;text-underline-offset:3px; }
 @media(prefers-reduced-motion:reduce){ .pl-hide .blur-pl{transition:none} }
 @media(min-width:760px){ .hero .big { font-size:40px !important; } }
+
+/* ===== Analiz sekmeleri ve geniş ekran yerleşimi ===== */
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;border-radius:var(--r-md);background:color-mix(in srgb,var(--elevated) 92%,transparent);border:1px solid var(--border);position:sticky;top:calc(8px + env(safe-area-inset-top,0px));z-index:5;backdrop-filter:blur(12px)}
+.seg button{min-height:40px;border-radius:calc(var(--r-md) - 4px);font-weight:600;font-size:14px;color:var(--muted);transition:background var(--t-fast),color var(--t-fast)}
+.seg button.on{background:var(--accent);color:var(--accent-fg)}
+.ins-filters{display:grid;gap:var(--sp-2)}
+.ins-grid{display:grid;gap:var(--sp-3);grid-template-columns:minmax(0,1fr)}
+.ins-grid>*{min-width:0}
+@media(min-width:760px){.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.ins-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:1024px){main.m{max-width:1040px}}
