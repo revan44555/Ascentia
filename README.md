@@ -51,3 +51,9 @@ Veri sunucuya gönderilmez. Analitik, izleme, çerez yok. Yedek dosyaları senin
 - Mobilde yüzen alt navigasyon, daha belirgin günlük P&L kartı ve ana ekranda hızlı işlem/analiz kısayolları.
 - İşlem formu, analiz, kartlar ve grafikler için daha tutarlı dokunma alanları, yüzeyler ve tipografik hiyerarşi.
 - PWA tema rengi ve service worker önbellek sürümü yenilendi.
+
+
+## v3.1
+- Analiz ekranı sekmelere ayrıldı: Özet, Zaman, Strateji, Davranış; filtreler her zaman görünür.
+- Güvenlik: görsel ve id alanları kaçırılıyor, görsel yalnızca image data URL kabul ediyor.
+- CSV: negatif sayılar metne dönmüyor. Para birimi açılışta yükleniyor. Service worker stale-while-revalidate.
