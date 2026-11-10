@@ -20,11 +20,11 @@ function viewAccounts(){
 return `<div class="stack">${pageHead("Hesaplar",1)}
 <div class="card s3">
 ${state.accounts.map(a=>`<div class="card" style="padding:12px;background:var(--elevated);box-shadow:none">
-<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><input class="inp" style="height:40px" data-aid="name:${a.id}" value="${esc(a.name)}" aria-label="Hesap adı">${state.accounts.length>1?`<button type="button" class="btn sm danger" data-act="delacc" data-id="${a.id}" aria-label="Hesabı sil">Sil</button>`:""}</div>
-<div class="grid2" style="margin-top:8px"><div><label class="fld"><span>Bakiye (${esc(state.prefsCur||"USD")})</span><input class="inp" inputmode="decimal" data-aid="balance:${a.id}" value="${a.balance||""}"></label></div>
-<div><label class="fld"><span>Para birimi</span><input class="inp" data-aid="cur:${a.id}" maxlength="3" value="${esc(a.cur||"")}"></label></div></div>
-<div class="grid2"><div><label class="fld"><span>Günlük kayıp limiti</span><input class="inp" inputmode="decimal" placeholder="ör. 200" data-aid="dl:${a.id}" value="${a.dl||""}"></label></div>
-<div><label class="fld"><span>Maks. düşüş (%)</span><input class="inp" inputmode="decimal" placeholder="ör. 6" data-aid="md:${a.id}" value="${a.md||""}"></label></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><input class="inp" style="height:40px" data-aid="name:${esc(a.id)}" value="${esc(a.name)}" aria-label="Hesap adı">${state.accounts.length>1?`<button type="button" class="btn sm danger" data-act="delacc" data-id="${esc(a.id)}" aria-label="Hesabı sil">Sil</button>`:""}</div>
+<div class="grid2" style="margin-top:8px"><div><label class="fld"><span>Bakiye (${esc(state.prefsCur||"USD")})</span><input class="inp" inputmode="decimal" data-aid="balance:${esc(a.id)}" value="${a.balance||""}"></label></div>
+<div><label class="fld"><span>Para birimi</span><input class="inp" data-aid="cur:${esc(a.id)}" maxlength="3" value="${esc(a.cur||"")}"></label></div></div>
+<div class="grid2"><div><label class="fld"><span>Günlük kayıp limiti</span><input class="inp" inputmode="decimal" placeholder="ör. 200" data-aid="dl:${esc(a.id)}" value="${a.dl||""}"></label></div>
+<div><label class="fld"><span>Maks. düşüş (%)</span><input class="inp" inputmode="decimal" placeholder="ör. 6" data-aid="md:${esc(a.id)}" value="${a.md||""}"></label></div></div>
 <div class="rowline" style="padding-bottom:0"><span>Güncel bakiye</span><span class="mono ${pnlClass(currentBalance(a))}">${money(currentBalance(a))}</span></div>
 </div>`).join("")}
 <div class="addrow"><input class="inp" placeholder="Yeni hesap adı" data-newacc="1"><button type="button" class="btn md secondary" data-act="addacc">Ekle</button></div>
@@ -67,7 +67,7 @@ const longNote=t.qty*(t.mult||1)>=1e4?"Kontrat çarpanı eksik olabilir (ör. fo
 const d=dcs(t.entry),closeCard=t.exit==null?`<div class="card s3"><p class="sect-h">Pozisyonu kapat</p>
 <div class="grid2"><div><label class="fld"><span>Çıkış fiyatı</span><input class="inp" id="cx" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="ör. 1.0880"></label><p class="ferr" id="fe-cx" role="alert"></p></div><div><label class="fld"><span>Miktar (boş = tamamı)</span><input class="inp" id="cq" inputmode="decimal" placeholder="ör. 0.05"></label><p class="ferr" id="fe-cq" role="alert"></p></div></div>
 <p class="subtle" style="font-size:13px">Açık miktar: ${numF(t.qty,2)} · Miktarı boş bırakırsan tamamı kapanır; daha küçük girersen kısmi kapanır.</p>
-<button type="button" class="btn lg primary" data-act="closetrade" data-id="${t.id}">Kapat</button></div>`:"";
+<button type="button" class="btn lg primary" data-act="closetrade" data-id="${esc(t.id)}">Kapat</button></div>`:"";
 return `<div class="stack">
 <a href="#/trades" class="bk">‹ İşlemler</a>
 <div class="card">
@@ -90,7 +90,7 @@ ${t.emo?row("Duygu",esc(t.emo)):""}
 ${t.mist?row("Hata",esc(t.mist)):""}
 ${t.rt?row("İşlem puanı",t.rt+" ★"):""}
 ${t.notes?`<div style="margin-top:8px"><p class="lbl">Not</p><p style="margin-top:4px;font-size:15px;white-space:pre-wrap">${esc(t.notes)}</p></div>`:""}
-${t.img?`<div style="margin-top:10px"><p class="lbl">Görsel</p><img src="${t.img}" alt="İşlem grafiği" style="width:100%;border-radius:10px;display:block;margin-top:6px"></div>`:""}
+${t.img?`<div style="margin-top:10px"><p class="lbl">Görsel</p><img src="${esc(t.img)}" alt="İşlem grafiği" style="width:100%;border-radius:10px;display:block;margin-top:6px"></div>`:""}
 </div></div>
 <div class="card"><p class="lbl">Hesap</p><div class="divide" style="margin-top:8px">
 ${row("Hesap",esc(a?a.name:"—"))}
@@ -98,5 +98,5 @@ ${row("Güncel bakiye","<span class=\"mono\">"+esc(money(a?currentBalance(a):nul
 ${row("Equity (bu işleme kadar)","<span class=\"mono\">"+esc(money(eqAfter))+"</span>")}
 </div></div>
 ${(longNote||needFix)?`<div class="card"><p class="lbl">Notlar</p>${longNote?`<p class="warn" style="margin-top:4px;font-size:14px">${longNote}</p>`:""}${needFix?`<p class="warn" style="margin-top:4px;font-size:14px">${si[0]} için kontrat çarpanı girilmemiş (şu an 1).${si[2]==="Forex"?" Forex çarpanı genelde 100.000.":""} Düzenle → Gelişmiş'ten gir.</p>`:""}</div>`:""}
-<div class="actrow"><a class="btn md secondary" href="#/add?id=${encodeURIComponent(t.id)}">Düzenle</a><button type="button" class="btn md secondary" data-act="clone" data-id="${t.id}">Kopyala</button><button type="button" class="btn md danger" data-act="deltrade" data-id="${t.id}">Sil</button></div>
+<div class="actrow"><a class="btn md secondary" href="#/add?id=${encodeURIComponent(t.id)}">Düzenle</a><button type="button" class="btn md secondary" data-act="clone" data-id="${esc(t.id)}">Kopyala</button><button type="button" class="btn md danger" data-act="deltrade" data-id="${esc(t.id)}">Sil</button></div>
 </div>`}

@@ -58,7 +58,7 @@ if(i<0)toast("Kaydedildi")
 }
 
 function tradesToCsv(trades){
-const q=v=>{const s=String(v??"");return/^[=+\-@\t\r]/.test(s)?"'"+s:s};
+const q=v=>{const s=String(v??"");return/^[=+\-@\t\r]/.test(s)&&!(s.trim()!==""&&Number.isFinite(Number(s)))?"'"+s:s};
 const head=["tarih","sembol","yon","hacim","giris","kapanis","komisyon","swap","tp","sl","ilk_stop","cikis_tarihi","carpan","kur","net_pnl","R","setup","duygu","hata","plan","puan","chk","not","hesap"];
 const lines=[head.join(",")];
 trades.forEach(t=>{lines.push([q(formatWhen(t.date)),q(t.symbol),t.dir,q(t.qty),q(t.entry),q(t.exit),q(t.fees||""),q(t.swap||""),q(t.tp),q(t.stop),q(t.stop0),q(t.exitDate?formatWhen(t.exitDate):""),q(t.mult||1),q(t.fx||1),q(pnl(t)),q(rr(t)!=null?Math.round(rr(t)*100)/100:""),q(t.setup),q(t.emo),q(t.mist),q(t.plan),q(t.rt||""),q(t.chk==null?"":t.chk),q(t.notes),q((accountOf(t)||{}).name||"")].join(","))});
@@ -67,11 +67,12 @@ function downloadText(name,text,mime){const b=new Blob([mime==="text/csv"?"﻿"+
 function markBackup(){state.lastBackupAt=Date.now();saveBackupStamp(String(Date.now()))}
 
 document.getElementById("view").addEventListener("click",e=>{
-const actEl=e.target.closest("[data-act],[data-sym],[data-facc],[data-rng],[data-lchip],[data-chip],[data-qd],[data-qx],[data-tip]");
+const actEl=e.target.closest("[data-act],[data-sym],[data-facc],[data-rng],[data-lchip],[data-chip],[data-qd],[data-qx],[data-itab],[data-tip]");
 if(!actEl)return;
 if(actEl.dataset.tip!==undefined&&actEl.hasAttribute("data-tip")&&!actEl.dataset.act){toast(actEl.getAttribute("data-tip"));return}
 if(actEl.dataset.qd!==undefined){const m=+actEl.dataset.qd,d=new Date(Date.now()-m*6e4);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());form.date=d.toISOString().slice(0,16);const di=document.querySelector('[data-f="date"]');if(di)di.value=form.date;return}
 if(actEl.dataset.qx!==undefined&&form.date){const m=+actEl.dataset.qx,b=new Date(new Date(form.date).getTime()+m*6e4),n=new Date();b.setMinutes(b.getMinutes()-b.getTimezoneOffset());n.setMinutes(n.getMinutes()-n.getTimezoneOffset());form.exitDate=(b>n?n:b).toISOString().slice(0,16);const di=document.querySelector('[data-f="exitDate"]');if(di)di.value=form.exitDate;return}
+if(actEl.dataset.itab!==undefined){INS_TAB=actEl.dataset.itab;render();return}
 if(actEl.dataset.facc!==undefined){state.filterAccountId=actEl.dataset.facc;render();return}
 if(actEl.dataset.rng!==undefined){RANGE=actEl.dataset.rng;render();return}
 if(actEl.dataset.lchip!==undefined){const[k,v]=actEl.dataset.lchip.split(":");listState[k]=listState[k]===v?"":v;const tl=$("#tradeList");if(tl)tl.innerHTML=tradesListHtml();document.querySelectorAll("[data-lchip]").forEach(c=>{const[a,b]=c.dataset.lchip.split(":");c.classList.toggle("on",listState[a]===b);c.setAttribute("aria-pressed",listState[a]===b)});return}

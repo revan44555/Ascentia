@@ -35,7 +35,7 @@ let lT=pj(TRADES_KEY);if(!Array.isArray(lT))lT=null;
 let lA=pj(ACC_KEY);if(!Array.isArray(lA)||!lA.length)lA=null;
 const tg=pj(TAGS_KEY);const lG=tg&&typeof tg==="object"?normTags({setups:tg.s,emos:tg.e,mists:tg.m,syms:tg.y}):null;
 state.trades=(await pick(iT,lT,"trades"))||[];
-const ac=await pick(iA,lA,"accounts");if(ac)state.accounts=ac;
+const ac=await pick(iA,lA,"accounts");if(ac)state.accounts=ac;{const c=state.accounts.find(a=>a.cur);if(c)state.prefsCur=c.cur}
 const tags=await pick(iG,lG,"tags");if(tags)state.tags=tags;
 state.theme=lsGet(THEME_KEY)==="light"?"light":"dark";
 state.lastBackupAt=Number(lsGet(BACKUP_KEY)||0)||null;
@@ -43,7 +43,7 @@ try{if(navigator.storage&&navigator.storage.persisted){state.durable=await navig
 applyTheme();
 }
 // DEĞİŞİKLİK (iOS): theme-color artık iOS arka plan renkleriyle eşleşiyor
-function applyTheme(){document.documentElement.classList.toggle("light",state.theme==="light");document.documentElement.classList.toggle("dark",state.theme!=="light");const tc=document.querySelector("meta[name=theme-color]");if(tc)tc.content=state.theme==="light"?"#F2F2F7":"#000000"}
+function applyTheme(){document.documentElement.classList.toggle("light",state.theme==="light");document.documentElement.classList.toggle("dark",state.theme!=="light");const tc=document.querySelector("meta[name=theme-color]");if(tc)tc.content=state.theme==="light"?"#f2f5ef":"#08110f"}
 
 function restoreJson(raw,silent){if(!raw||!Array.isArray(raw.accounts)||!Array.isArray(raw.trades))return null;
 if(!silent&&state.trades.length){const n=(raw.trades||[]).length;if(!confirm(n+" işlemli yedek yüklenecek ve mevcut defterin ÜZERİNE yazılacak.\n\nÖnce mevcut defteri yedeklemek istersen şimdi iptal edip 'Yedekle'yi kullan."))return null}

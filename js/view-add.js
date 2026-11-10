@@ -58,7 +58,7 @@ ${tagSection("emos","Duygu",state.tags.emos,"emo")}
 <div id="planwrap" ${form.exit?"":"hidden"}><p style="margin-bottom:6px;font-size:13px;font-weight:500;letter-spacing:.04em;color:var(--muted)">Plana uydun mu?</p>${chipRow([{v:"evet",l:"Uydum"},{v:"hayır",l:"Uymadım"}],form.plan,"plan",true)}</div>
 ${tagSection("mists","Hata",state.tags.mists,"mist")}
 <div><p style="margin-bottom:6px;font-size:13px;font-weight:500;letter-spacing:.04em;color:var(--muted)">Görsel (chart ekran görüntüsü)</p>
-${form.img?`<img src="${form.img}" alt="İşlem grafiği" style="width:100%;border-radius:10px;display:block">`:`<p class="subtle" style="font-size:13px">Henüz görsel yok.</p>`}
+${form.img?`<img src="${esc(form.img)}" alt="İşlem grafiği" style="width:100%;border-radius:10px;display:block">`:`<p class="subtle" style="font-size:13px">Henüz görsel yok.</p>`}
 <div class="acc-f" style="margin-top:8px"><label class="btn sm secondary" style="cursor:pointer">Görsel seç<input type="file" accept="image/*" hidden data-file="img"></label>${form.img?`<button type="button" class="btn sm ghost" data-act="imgdel">Kaldır</button>`:""}</div></div>
 <label class="fld"><span>Not</span><textarea class="inp" rows="3" data-f="notes">${esc(form.notes)}</textarea></label>
 <details class="dt adv" ${techOpen()?"open":""}><summary>Gelişmiş: ilk stop, kur, çarpan</summary><div class="stack4" style="margin:8px 0">

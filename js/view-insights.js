@@ -25,7 +25,7 @@ function limitBanner(){
 }
 
 function ddCard(trades){const cl=byExit(trades.filter(t=>pnl(t)!=null));if(cl.length<2)return"";let eq=0,pk=0;const dd=cl.map(t=>{eq+=pnl(t);pk=Math.max(pk,eq);return eq-pk}),mn=Math.min(...dd,-1e-9),W=640,H=110,X=i=>i/(dd.length-1)*W,Y=v=>6+(v/mn)*(H-12),d=dd.map((v,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)).join(" "),dt=t=>{const x=ek(t).slice(0,10).split("-");return x[2]+"."+x[1]+"."+x[0].slice(2)};
-return `<div class="card"><p class="lbl">Düşüş eğrisi (zirveden uzaklık) · en derin ${money(mn,2)}</p><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:110px;display:block;margin-top:8px"><path d="${d} L${W} 6 L0 6 Z" fill="var(--dn)" opacity=".16"/><path d="${d}" fill="none" stroke="var(--dn)" stroke-width="2" vector-effect="non-scaling-stroke"/><line x1="0" x2="${W}" y1="6" y2="6" stroke="var(--border)"/></svg><div class="bar" style="grid-template-columns:1fr auto;margin-top:6px"><span>${dt(cl[0])}</span><span>${dt(cl[cl.length-1])}</span></div></div>`}
+return `<div class="card"><p class="lbl">Düşüş eğrisi (zirveden uzaklık) · en derin ${money(mn,2)}</p><svg role="img" aria-label="Düşüş eğrisi" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:110px;display:block;margin-top:8px"><path d="${d} L${W} 6 L0 6 Z" fill="var(--dn)" opacity=".16"/><path d="${d}" fill="none" stroke="var(--dn)" stroke-width="2" vector-effect="non-scaling-stroke"/><line x1="0" x2="${W}" y1="6" y2="6" stroke="var(--border)"/></svg><div class="bar" style="grid-template-columns:1fr auto;margin-top:6px"><span>${dt(cl[0])}</span><span>${dt(cl[cl.length-1])}</span></div></div>`}
 function monthRows(trades){const m=new Map();unitize(trades).filter(t=>pnl(t)!=null).forEach(t=>{const k=ek(t).slice(0,7),r=m.get(k)||{key:k,n:0,wins:0,net:0};r.n++;r.net+=pnl(t);if(pnl(t)>0)r.wins++;m.set(k,r)});return[...m.values()].sort((a,b)=>b.key.localeCompare(a.key)).map(r=>({...r,key:["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"][+r.key.slice(5)-1]+" "+r.key.slice(0,4),winRate:100*r.wins/r.n}))}
 function accRows(trades){return breakdown(trades,"acc").map(r=>({...r,key:(state.accounts.find(a=>a.id===r.key)||state.accounts[0]).name}))}
 
@@ -75,7 +75,7 @@ const ih=H-pt-pb,X=i=>i/(points.length-1)*iw,Y=v=>pt+(1-(v-mn)/(mx-mn))*ih;
 const ticks=[0,1,2,3].map(i=>mx-(mx-mn)*i/3);EQ={pts:points,pl,iw,W};
 let d=`M ${X(0).toFixed(1)} ${Y(points[0].equity).toFixed(1)}`;for(let i=1;i<points.length;i++)d+=` L ${X(i).toFixed(1)} ${Y(points[i].equity).toFixed(1)}`;
 return `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px;font-size:13px"><span style="font-weight:500;letter-spacing:.04em;color:var(--muted)">Kümülatif P&L</span><span id="eqread" class="mono muted"></span></div>
-<div class="eqwrap"><svg id="eqsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="touch-action:pan-y;cursor:crosshair">
+<div class="eqwrap"><svg id="eqsvg" role="img" aria-label="Kümülatif P&amp;L eğrisi" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="touch-action:pan-y;cursor:crosshair">
 <defs><linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity="0.16"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
 ${ticks.map(t=>`<line x1="0" x2="${W}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--border)"/>`).join("")}
 ${mn<0&&mx>0?`<line x1="0" x2="${W}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--border)" stroke-dasharray="3"/>`:""}
@@ -96,22 +96,14 @@ return `<div class="card"><div style="display:flex;align-items:center;justify-co
 ${Array.from({length:offset},()=>"<div></div>").join("")}
 ${cells.map(c=>`<div class="${tone(c)}" title="${c.date} · ${c.n} işlem · ${money(c.net)}" data-tip="${c.date} · ${c.n} işlem · ${money(c.net)}">${Number(c.date.slice(8))}</div>`).join("")}
 </div></div>`}
+let INS_TAB="ozet";
+const INS_TABS=[["ozet","Özet"],["zaman","Zaman"],["strateji","Strateji"],["davranis","Davranış"]];
+function insTabs(){return `<div class="seg" role="tablist" aria-label="Analiz bölümleri">${INS_TABS.map(([k,l])=>`<button type="button" role="tab" aria-selected="${INS_TAB===k}" class="${INS_TAB===k?"on":""}" data-itab="${k}">${l}</button>`).join("")}</div>`}
 function viewInsights(){
 const trades=filterAccount(state.trades,state.filterAccountId).filter(inRange);
 const s=summarize(trades);
 if(!s.closed){return `<div style="padding:64px 0;text-align:center"><h1 style="font-size:24px;font-weight:500;letter-spacing:-.02em">Analiz</h1><p class="muted" style="margin-top:8px;font-size:15px">İstatistik için kapanmış işlem gerekli.</p></div>`}
-return `<div class="stack">
-<header class="page-h"><p class="eyebrow">Performans</p><h1>Analiz</h1></header>
-<details class="filt"${(state.filterAccountId!=="all"||RANGE!=="all")?" open":""}><summary>Filtreler</summary><div class="s3" style="margin-top:8px">${accChips()}${rangeChips()}</div></details>
-<div class="g4">
-${kpi("Net P&L",money(s.net),s.net>0?"up":s.net<0?"dn":"muted","","Komisyon düşüldükten sonra toplam kâr/zarar.")}
-${kpi("Kazanma oranı",s.winRate==null?"—":Math.round(s.winRate)+"%","","","Kârla kapanan işlemlerin yüzdesi.")}
-${kpi("Kâr faktörü",s.profitFactor==null?(s.closed?"Zarar yok":"—"):numF(s.profitFactor,2),"","","Toplam kâr ÷ toplam zarar. 1'in üstü kârlı demektir.")}
-${kpi("Ort. R",s.avgR==null?(s.closed?"Stop yok":"—"):rf(s.avgR),s.avgR!=null&&s.avgR>0?"up":s.avgR!=null&&s.avgR<0?"dn":"muted","","Kazancın riske (stop mesafesi) oranı. 1R = riske ettiğin tutar.")}
-</div>
-${equityChart(equityPoints(trades))}
-${insightsCard(trades)}
-<details class="dt"><summary>Daha fazla istatistik</summary><div class="g3" style="margin-top:8px">
+const stats=`<div class="g3">
 ${kpi("Kapanan",String(s.closed),"","sm","Kapanmış işlem sayısı.")}
 ${kpi("Maks. düşüş",money(-s.maxDd),s.maxDd?"dn":"muted","sm","Zirveden en büyük geri çekilme (tutar).")}
 ${kpi("Düşüş %",s.ddPct==null?"—":"−"+pct(s.ddPct),s.ddPct?"dn":"muted","sm","Aynı geri çekilme, bakiyeye göre yüzde.")}
@@ -120,19 +112,22 @@ ${kpi("Maks. risk %",pct(s.maxRiskPct),"","sm","En yüksek tek işlem riski.")}
 ${kpi("Beklenti",s.expectancy==null?"—":money(s.expectancy),s.expectancy!=null&&s.expectancy>0?"up":s.expectancy!=null&&s.expectancy<0?"dn":"muted","sm","İşlem başına ortalama kâr/zarar.")}
 ${kpi("Kazanç/kayıp",s.payoff==null?"—":numF(s.payoff,2),"","sm","Ortalama kazanç ÷ ortalama kayıp.")}
 ${kpi("Kazanç serisi",String(s.streakWin),"","sm","En uzun üst üste kazanç.")}
-${kpi("Kayıp serisi",String(s.streakLoss),"","sm","En uzun üst üste kayıp.")}
-</div></details>
-<details class="dt"><summary>R ve saat dağılımı</summary><div class="stack" style="margin-top:8px">${distCards(trades)}</div></details>
-<details class="dt"><summary>Düşüş, aylık ve hesap</summary><div class="stack" style="margin-top:8px">${ddCard(trades)}${breakdownTable("Ay",monthRows(trades))}${state.accounts.length>1?breakdownTable("Hesap",accRows(trades)):""}</div></details>
-<details class="dt"><summary>Takvim</summary>${calendarHeat(filterAccount(state.trades,state.filterAccountId))}</details>
-<details class="dt"><summary>Dağılımlar</summary><div class="stack" style="margin-top:8px">${breakdownTable("Setup",breakdown(trades,"setup"))}
-${breakdownTable("Sembol",breakdown(trades,"symbol"))}
-${breakdownTable("Duygu",breakdown(trades,"emo"))}
-${breakdownTable("Hata",breakdown(trades,"mist").filter(r=>r.key!=="Etiketsiz"))}
-${breakdownTable("Plan",breakdown(trades,"plan"))}
-${breakdownTable("Yön",breakdown(trades,"dir"))}
-${breakdownTable("Seans (Londra)",breakdown(trades,"session"))}
-${breakdownTable("Gün",breakdown(trades,"weekday"))}
-${breakdownTable("Tutma süresi",breakdown(trades,"hold").filter(r=>r.key!=="Belirsiz"))}</div></details>
-
+${kpi("Kayıp serisi",String(s.streakLoss),"","sm","En uzun üst üste kayıp.")}</div>`;
+const bt=(t,k,f)=>breakdownTable(t,breakdown(trades,k).filter(f||(()=>true))),G=x=>`<div class="ins-grid">${x}</div>`;
+let body;
+if(INS_TAB==="zaman")body=calendarHeat(filterAccount(state.trades,state.filterAccountId))+G(distCards(trades))+breakdownTable("Ay",monthRows(trades))+G(bt("Gün","weekday")+bt("Seans (Londra)","session")+bt("Tutma süresi","hold",r=>r.key!=="Belirsiz"));
+else if(INS_TAB==="strateji")body=G(bt("Setup","setup")+bt("Sembol","symbol")+bt("Yön","dir")+(state.accounts.length>1?breakdownTable("Hesap",accRows(trades)):""));
+else if(INS_TAB==="davranis")body=G(bt("Duygu","emo")+bt("Hata","mist",r=>r.key!=="Etiketsiz")+bt("Plan","plan"));
+else body=`<div class="g4">
+${kpi("Net P&L",money(s.net),s.net>0?"up":s.net<0?"dn":"muted","","Komisyon düşüldükten sonra toplam kâr/zarar.")}
+${kpi("Kazanma oranı",s.winRate==null?"—":Math.round(s.winRate)+"%","","","Kârla kapanan işlemlerin yüzdesi.")}
+${kpi("Kâr faktörü",s.profitFactor==null?(s.closed?"Zarar yok":"—"):numF(s.profitFactor,2),"","","Toplam kâr ÷ toplam zarar. 1'in üstü kârlı demektir.")}
+${kpi("Ort. R",s.avgR==null?(s.closed?"Stop yok":"—"):rf(s.avgR),s.avgR!=null&&s.avgR>0?"up":s.avgR!=null&&s.avgR<0?"dn":"muted","","Kazancın riske oranı. 1R = riske ettiğin tutar.")}
+</div>${equityChart(equityPoints(trades))}${G(ddCard(trades)+insightsCard(trades))}${stats}`;
+if(!body.replace(/<[^>]*>/g,"").trim())body='<p class="muted" style="padding:40px 0;text-align:center">Bu bölüm için etiketli işlem yok. İşlem eklerken Ayrıntılar bölümünden etiket seç.</p>';
+return `<div class="stack">
+<header class="page-h"><p class="eyebrow">Performans</p><h1>Analiz</h1></header>
+<div class="ins-filters">${accChips()}${rangeChips()}</div>
+${insTabs()}
+${body}
 </div>`}
