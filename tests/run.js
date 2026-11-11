@@ -67,7 +67,7 @@ function load(store) {
   }
   const names = ["num", "pnl", "risk", "rr", "validate", "summarize", "breakdown", "adherence", "normTrade", "restoreJson", "importCsv", "loadAll",
     "saveTrades", "saveAccounts", "saveTags", "state", "sessionOf", "monthRows", "applyPartial", "tradesToCsv", "backupJson", "render", "accountId", "DEFAULT_TAGS", "TRADES_KEY", "unitize",
-    "fixThou", "toStamp", "jsonmerge", "insightsCard", "propStatus", "propCard", "limitBanner", "distCards", "saveForm", "emptyForm", "fromTrade", "form"];
+    "fixThou", "toStamp", "jsonmerge", "insightsCard", "propStatus", "propCard", "limitBanner", "distCards", "saveForm", "emptyForm", "fromTrade", "form", "wipeStores"];
   const T = vm.runInContext("({" + names.map(n => `${n}:typeof ${n}!=='undefined'?${n}:undefined`).join(",") + "})", ctx);
   return { T, ctx, env, store };
 }
@@ -454,6 +454,38 @@ test("PWA","manifest geçerli, ikonlar ve maskable mevcut",()=>{const m=JSON.par
 test("PWA","sw.js sözdizimi geçerli, install/fetch handlerları var",()=>{const s=fs.readFileSync(path.join(DIR,"sw.js"),"utf8");new vm.Script(s);expect(/install/.test(s)&&/fetch/.test(s)&&/caches\.open/.test(s),"handler eksik")});
 test("QC","son kapanan işlem için anı kartı çıkar; qc=1 olunca kalkar",()=>{const{T,ctx}=load();withAcc(T);const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());const iso=n.toISOString().slice(0,16);T.state.trades=[{...base,id:"Q1",date:iso,exitDate:iso}];let h=vm.runInContext("viewHome()",ctx);expect(/Anı değerlendir/.test(h)&&/data-act="qcsave"/.test(h),"kart yok");T.state.trades[0].qc=1;h=vm.runInContext("viewHome()",ctx);expect(!/Anı değerlendir/.test(h),"kart hâlâ var")});
 test("IMG","görsel dataURL kaydedilir, normTrade ve yedekten korunur",()=>{const{T,ctx}=load();withAcc(T);const u="data:image/jpeg;base64,/9j/test";vm.runInContext('form=emptyForm();form.symbol="EURUSD";form.entry="1.1";form.qty="1";form.stop="1.095";form.exit="1.105";form.img="'+u+'";form.__for="/add";',ctx);ctx.saveForm();const t=T.state.trades[0];expect(t.img===u,"img kaydedilmedi");expect(T.normTrade(JSON.parse(JSON.stringify(t))).img===u,"normTrade düşürdü");T.restoreJson({trades:[JSON.parse(JSON.stringify(t))],accounts:[{id:"a1",name:"A",balance:0}]},true);expect(T.state.trades[0].img===u,"restore kaybetti")});
+
+// ===== Yama 21 regresyon testleri =============================================
+test("F21", "Sıfırlama: localStorage temizlenince IndexedDB'deki işlemler geri gelmez", async () => {
+  const s = newStore(); const a = load(s); withAcc(a.T);
+  a.T.saveTrades([{ ...base, id: "A" }]); await sleep(40);
+  s.ls = {}; await a.T.wipeStores();
+  const b = load(s); await b.T.loadAll();
+  expect(b.T.state.trades.length === 0, "sıfırlamadan sonra işlem sayısı " + b.T.state.trades.length + " (0 olmalı)");
+});
+test("F22", "CSV dışa aktarma virgül/tırnak/satır sonlu notu kaçışlar, geri alınca aynı kalır", () => {
+  const { T } = load(); withAcc(T);
+  const note = 'a,b "x"\nikinci satır';
+  T.state.trades = [{ ...base, notes: note }];
+  const csv = T.tradesToCsv(T.state.trades);
+  T.state.trades = [];
+  const r = T.importCsv(csv);
+  expect(r.added === 1 && T.state.trades[0].notes === note, JSON.stringify([r, T.state.trades[0] && T.state.trades[0].notes]));
+});
+test("F23", "Anı değerlendir kartı qc=0 olan yeni kaydedilmiş işlemde de çıkar", () => {
+  const { T, ctx } = load(); withAcc(T);
+  const n = new Date(); n.setMinutes(n.getMinutes() - n.getTimezoneOffset());
+  const iso = n.toISOString().slice(0, 16);
+  T.state.trades = [{ ...base, id: "Q2", date: iso, exitDate: iso, qc: 0 }];
+  expect(/Anı değerlendir/.test(vm.runInContext("viewHome()", ctx)), "kart çıkmadı");
+});
+test("F24", "Kur: kotasyon para birimi hesap para birimiyle aynıysa kur istenmez; farklıysa istenir", () => {
+  const mk = ctx => vm.runInContext('form=emptyForm();form.symbol="USDTRY";form.entry="30";form.qty="1";form.stop="29";form.exit="31";form.__for="/add";', ctx);
+  const a = load(); a.T.state.accounts = [{ id: "a1", name: "TL", balance: 1000, cur: "TRY" }]; mk(a.ctx); a.ctx.saveForm();
+  expect(a.T.state.trades.length === 1, "TRY hesabında USDTRY reddedildi");
+  const b = load(); b.T.state.accounts = [{ id: "a1", name: "USD", balance: 1000, cur: "USD" }]; mk(b.ctx); b.ctx.saveForm();
+  expect(b.T.state.trades.length === 0, "USD hesabında kursuz USDTRY kabul edildi");
+});
 
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {

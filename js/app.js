@@ -42,7 +42,8 @@ try{const s0=localStorage.getItem("tj_chk_"+new Date().toISOString().slice(0,10)
 rec.chk=old0?old0.chk:chkToday;
 if(old0&&old0.grp)rec.grp=old0.grp;
 const qc=QCUR[sym]||(SYMS.find(x=>x[0]===sym)&&SYMS.find(x=>x[0]===sym)[2]==="Forex"&&!sym.endsWith("USD")?sym.slice(3,6):"");
-if(qc&&rec.fx===1&&ex0!=null){showFormErr("P&L kuru gerekli ("+qc+" → "+(state.prefsCur||"USD")+"). Gelişmiş → P&L kuru alanına gir.");return}
+const accCur=((accountOf(rec)||{}).cur||state.prefsCur||"USD").toUpperCase();
+if(qc&&qc!==accCur&&rec.fx===1&&ex0!=null){showFormErr("P&L kuru gerekli ("+qc+" → "+(state.prefsCur||"USD")+"). Gelişmiş → P&L kuru alanına gir.");return}
 const msg=validate(rec);
 if(msg){showFormErr(msg);const g=$("#symsug");if(g)g.innerHTML=symHint(true);return}
 if(ex0!=null&&!rec.exitDate)rec.exitDate=now;
@@ -58,7 +59,7 @@ if(i<0)toast("Kaydedildi")
 }
 
 function tradesToCsv(trades){
-const q=v=>{const s=String(v??"");return/^[=+\-@\t\r]/.test(s)&&!(s.trim()!==""&&Number.isFinite(Number(s)))?"'"+s:s};
+const q=v=>{let s=String(v??"");if(/^[=+\-@\t\r]/.test(s)&&!(s.trim()!==""&&Number.isFinite(Number(s))))s="'"+s;return/[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
 const head=["tarih","sembol","yon","hacim","giris","kapanis","komisyon","swap","tp","sl","ilk_stop","cikis_tarihi","carpan","kur","net_pnl","R","setup","duygu","hata","plan","puan","chk","not","hesap"];
 const lines=[head.join(",")];
 trades.forEach(t=>{lines.push([q(formatWhen(t.date)),q(t.symbol),t.dir,q(t.qty),q(t.entry),q(t.exit),q(t.fees||""),q(t.swap||""),q(t.tp),q(t.stop),q(t.stop0),q(t.exitDate?formatWhen(t.exitDate):""),q(t.mult||1),q(t.fx||1),q(pnl(t)),q(rr(t)!=null?Math.round(rr(t)*100)/100:""),q(t.setup),q(t.emo),q(t.mist),q(t.plan),q(t.rt||""),q(t.chk==null?"":t.chk),q(t.notes),q((accountOf(t)||{}).name||"")].join(","))});
@@ -118,7 +119,7 @@ const idx=state.trades.indexOf(t);state.trades.splice(idx,1);saveTrades(state.tr
 toast("Silindi",null,6000,{label:"Geri al",fn:()=>{state.trades.splice(idx,0,t);saveTrades(state.trades);render()}});return}
 if(act==="clone"){const t=state.trades.find(x=>x.id===actEl.dataset.id);if(!t)return;const c=fromTrade(t);delete c.id;form={...c,date:nowLocal(),__for:"/add"};location.hash="#/add";render();return}
 if(act==="clear"){if(!typedConfirm("TÜM veriler silinsin mi?"))return;
-const d=state.theme,f=state.fileName;try{localStorage.clear()}catch(e){}
+const d=state.theme,f=state.fileName;try{localStorage.clear()}catch(e){}wipeStores();saveTheme(d);
 Object.assign(state,{trades:[],accounts:[{id:"a1",name:"Ana hesap",balance:0,dl:0,md:0,cur:""}],tags:JSON.parse(JSON.stringify(DEFAULT_TAGS)),filterAccountId:"all",lastBackupAt:null,memoryOnly:false,file:"none",fileName:f,theme:d});
 saveBackupStamp("");location.hash="#/";render();return}
 if(act==="closetrade"){const t=state.trades.find(x=>x.id===actEl.dataset.id);if(!t||t.exit!=null)return;const p=num($("#cx").value),q=$("#cq")?num($("#cq").value):null,e=$("#fe-cq");

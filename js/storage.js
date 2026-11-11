@@ -10,6 +10,9 @@ async function dual(lk,lv,kk,v){const ts=Date.now();const a=lsSet(lk,lv);if(a){l
 function saveTrades(t){dual(TRADES_KEY,JSON.stringify(t),"trades",t)}
 function saveAccounts(a){dual(ACC_KEY,JSON.stringify(a),"accounts",a)}
 function saveTags(t){dual(TAGS_KEY,JSON.stringify({s:t.setups,e:t.emos,m:t.mists,y:t.syms||[]}),"tags",t)}
+// Sıfırlama: localStorage.clear() tek başına yetmez, IndexedDB kopyası yeniden yüklenirdi.
+// Bağlı yedek dosyasına dokunmaz (queueFile çağrılmaz).
+async function wipeStores(){const ts=Date.now();await kvSet("trades",[]);await kvSet("accounts",[{id:"a1",name:"Ana hesap",balance:0,dl:0,md:0,cur:""}]);await kvSet("tags",JSON.parse(JSON.stringify(DEFAULT_TAGS)));await kvSet("ts:trades",ts);await kvSet("ts:accounts",ts);await kvSet("ts:tags",ts)}
 function saveTheme(t){lsSet(THEME_KEY,t)}
 function saveBackupStamp(ts){lsSet(BACKUP_KEY,String(ts))}
 let EQ=null,lastPath=null,fh=null,fileTimer=null;
