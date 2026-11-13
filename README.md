@@ -16,14 +16,20 @@
 - Herhangi bir statik sunucu yeterli (GitHub Pages, Netlify, Vercel, `python -m http.server`).
 - Service worker (çevrimdışı kullanım) yalnızca `https://` veya `localhost`'ta etkindir.
 
-## Bu sürümde eklenenler (FIX 17–20)
-17. **FIX:** kontrol listesi snapshot'ı `saveForm`'da çökme ("1111" → JSON.parse sayı → `.filter` TypeError); liste artık ham string okunuyor.
-18. **PWA:** manifest.json + service worker + ikonlar; ana ekrana yüklenebilir, çevrimdışı açılır ("Daha" ekranında yükleme düğmesi).
-19. **Anı değerlendirme:** son 72 saatte kapanan işlemler için Bugün ekranında hızlı duygu+not kartı.
-20. **İşlem görseli:** ekleme/düzenlemede chart ekran görüntüsü (canvas ile sıkıştırılır, işlem kaydında dataURL olarak saklanır, JSON yedeğe dahil).
+## Geliştirme
+Uygulamanın kendisi bağımlılıksızdır; araçlar yalnızca geliştirme içindir (`npm install`).
 
-## Test
-`node tests/run.js` — bağımlılıksız sandbox'da 55 regresyon testi.
+| Komut | Ne yapar |
+|---|---|
+| `npm test` | Sahte DOM'lu sandbox'ta regresyon testleri (`tests/run.js`) |
+| `npm run test:e2e` | Gerçek Chromium'da 390px mobilde tıklama testleri (`tests/e2e.js`, Playwright) |
+| `npm run lint` | ESLint + tüm `js/` dosyalarını birleştirip tanımsız/kullanılmayan ad kontrolü (`tests/lint.js`) |
+| `npm run format` | Prettier ile biçimlendirir (`.prettierrc`, `.editorconfig`) |
+| `npm run check` | biçim + lint + test (CI'da da çalışır) |
+
+Kod düzeni: `js/` dosyaları tek ortak global kapsamı paylaşır ve `index.html`'deki sırayla yüklenir.
+Tıklama olayları `app.js` içinde tablo güdümlüdür (`CLICK_ATTRS` + `ACTIONS`): yeni bir düğme eklemek için
+`data-act="<eylem>"` yazıp `ACTIONS`'a bir işlev eklemek yeterlidir.
 
 ## Mimari
 ```
@@ -40,6 +46,8 @@ js/view-insights.js Analiz ekranı
 js/view-more.js     Ayarlar, hesap/etiket/veri sayfaları, işlem detayı
 js/app.js           router, form akışı, olay handlerları
 tests/run.js        Node tabanlı regresyon testleri (sahte DOM)
+tests/e2e.js        Gerçek tarayıcı (Playwright) tıklama testleri
+tests/lint.js       Birleşik kapsam lint kontrolü
 ```
 
 ## Gizlilik

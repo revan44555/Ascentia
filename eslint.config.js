@@ -88,4 +88,9 @@ module.exports = [
       "no-var": "error",
     },
   },
+  {
+    // page.evaluate(() => ...) içindeki kod tarayıcıda çalışır; uygulama globalleri orada tanımlıdır
+    files: ["tests/e2e.js"],
+    rules: { "no-undef": "off" },
+  },
 ];
