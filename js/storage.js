@@ -414,194 +414,218 @@ function jsonmerge(raw) {
   saveTrades(state.trades);
   return { added, skipped };
 }
-// FIX(2): hesap limitleri (dl/md/cur) yedekten geri yüklenir — eski yedeklerde yoksa 0/boş
+/* ------------------------------------------------------------------------- *
+ *  CSV içe aktarma (MT5 / TradingView / Excel / Ascentia'nın kendi dışa aktarımı)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Başlık eşanlamlıları (küçük harf). Anahtar = bizim alan adı, değer = kabul edilen sütun başlıkları.
+ * Alan adının kendisi de başlık olarak kabul edilir.
+ */
+const CSV_ALIASES = {
+  tarih: [
+    "open time",
+    "open date/time",
+    "open date",
+    "date",
+    "time",
+    "zaman",
+    "tarih_saat",
+    "datetime",
+  ],
+  cikis_tarihi: [
+    "close time",
+    "close date/time",
+    "close date",
+    "close datetime",
+    "exit time",
+    "exit date/time",
+    "exit datetime",
+    "cikis_tarihi",
+    "çıkış zamanı",
+    "çıkış tarihi",
+    "cikis zamani",
+    "cikis tarihi",
+  ],
+  yon: ["type", "direction", "side", "yon", "trend"],
+  sembol: ["symbol", "ticker", "enstruman", "instrument", "pair"],
+  hacim: ["volume", "size", "lot", "lots", "miktar", "quantity", "contract size"],
+  giris: ["open price", "openprice", "open", "entry", "price", "acilis"],
+  kapanis: ["close price", "closeprice", "close", "exit", "cikis"],
+  komisyon: ["commission", "fee", "fees", "komisyon"],
+  tp: ["t / p", "tp", "take profit", "takeprofit", "hedef", "target"],
+  sl: ["s / l", "sl", "stop loss", "stoploss", "stop"],
+};
+
+/**
+ * Başlık satırından sütun okuyucuları üretir.
+ *  - field(satır, alan): alanın başlığı ya da eşanlamlılarından ilk DOLU olan sütunun değeri
+ *  - exact(satır, başlık): yalnızca bu adlı sütunun değeri (Ascentia'nın kendi dışa aktarımı için)
+ */
+function csvColumns(headerRow) {
+  const headers = headerRow.map(x => String(x).trim().toLocaleLowerCase("tr"));
+  return {
+    exact(row, name) {
+      const i = headers.indexOf(name);
+      return i >= 0 ? (row[i] ?? "") : "";
+    },
+    field(row, key) {
+      for (const name of [key].concat(CSV_ALIASES[key] || [])) {
+        const i = headers.indexOf(name);
+        if (i >= 0 && row[i] != null && String(row[i]).trim() !== "") return row[i];
+      }
+      return "";
+    },
+  };
+}
+
+/** Komisyon (mutlak) − swap, 2 haneye yuvarlanır, negatife düşmez. Swap geliri maliyeti düşürür. */
+function csvFees(commission, swap) {
+  return Math.max(0, Math.round((Math.abs(commission || 0) - (swap || 0)) * 100) / 100);
+}
+
+/** Sembolün kontrat çarpanı (bilinmiyorsa 1). */
+function symbolMultiplier(symbol) {
+  const info = SYMS.find(x => x[0] === symbol);
+  return info ? info[1] : 1;
+}
+
+/** "Plan" sütunu: evet/uydu/yes/1 → "evet", "hayır" → "hayır", diğerleri → "". */
+function csvPlan(value) {
+  const text = String(value || "").trim();
+  if (["evet", "uydu", "yes", "1"].includes(text.toLocaleLowerCase("tr"))) return "evet";
+  return text === "hayır" ? "hayır" : "";
+}
+
+/**
+ * Tek CSV satırını işleme çevirir.
+ * Başarıda { rec }, atlanacaksa { error: "neden" } döner.
+ * resolveAccount(ad): hesabı bulur ya da oluşturur (satır geçerli olunca çağrılır).
+ */
+function parseCsvRow(row, col, resolveAccount) {
+  const symbol = String(col.field(row, "sembol") || "")
+    .trim()
+    .toUpperCase();
+  const dateRaw = String(col.field(row, "tarih") || "").trim();
+  const date = toStamp(dateRaw);
+  if (!symbol) return { error: "sembol sütunu bulunamadı" };
+  if (!dateRaw) return { error: "tarih sütunu yok veya boş" };
+  if (!date) return { error: "tarih okunamadı: " + dateRaw };
+
+  // Yön yalnızca açıkça yazılmışsa okunur. Fiyattan tahmin edilmez: zararla kapanan bir long
+  // işlem short sanılır ve P&L işareti ters çıkardı.
+  const dirRaw = String(col.field(row, "yon") || "")
+    .trim()
+    .toLocaleLowerCase("tr");
+  if (!dirRaw) return { error: "yön sütunu yok (Type/Direction/Side)" };
+  const dir = ["short", "sell"].includes(dirRaw) ? "SHORT" : "LONG";
+
+  const exitRaw = col.field(row, "kapanis");
+  const exit = num(exitRaw);
+  if (exitRaw && exit == null) return { error: "kapanış fiyatı sayı değil" };
+  const qty = num(col.field(row, "hacim"));
+  if (qty == null) return { error: "hacim/lot bulunamadı" };
+
+  const rec = {
+    id: newId(),
+    date,
+    symbol,
+    dir,
+    entry: num(col.field(row, "giris")),
+    exit,
+    qty,
+    stop: num(col.field(row, "sl")),
+    tp: num(col.field(row, "tp")),
+    fees: csvFees(num(col.field(row, "komisyon")), num(col.exact(row, "swap"))),
+    mult: num(col.exact(row, "carpan")) || symbolMultiplier(symbol),
+    fx: num(col.exact(row, "kur")) || 1,
+    acc: resolveAccount(col.exact(row, "hesap").trim()).id,
+    exitDate: toStamp(col.field(row, "cikis_tarihi")),
+    plan: csvPlan(col.exact(row, "plan")),
+    mist: String(col.exact(row, "hata") || "").trim(),
+    setup: String(col.exact(row, "setup") || "").trim(),
+    emo: String(col.exact(row, "duygu") || "").trim(),
+    notes: String(col.exact(row, "not") || "").trim(),
+    stop0: num(col.exact(row, "ilk_stop")),
+    rt: num(col.exact(row, "puan")),
+  };
+  if (rec.exitDate && rec.exitDate < rec.date) return { error: "çıkış zamanı girişten önce" };
+  if (rec.exit == null) rec.exitDate = ""; // açık işlemde çıkış zamanı olmaz
+  const invalid = validate(rec);
+  return invalid ? { error: invalid } : { rec };
+}
+
+/**
+ * Kapanmış, kotasyon para birimi USD olmayan bir forex işlemi kur (P&L kuru) olmadan içe
+ * aktarıldıysa sonuç yanlış olabilir; kullanıcı uyarılır.
+ */
+function missingFxRate(rec, fxRaw) {
+  const info = SYMS.find(x => x[0] === rec.symbol);
+  return (
+    !!info &&
+    info[2] === "Forex" &&
+    !rec.symbol.endsWith("USD") &&
+    num(fxRaw) == null &&
+    rec.exit != null
+  );
+}
+
+/**
+ * CSV metnini içe aktarır. Durumu (state) değiştirmez: yeni hesapları kaydeder, işlem listesini
+ * `trades` olarak döndürür (çağıran state.trades'e atar ve kaydeder).
+ * Dönüş: { added, skipped, why (ilk atlama nedeni), nofx (kur uyarısı sayısı), trades }
+ */
 function importCsv(text) {
   const rows = parseCsv(text);
-  if (rows.length < 2)
+  if (rows.length < 2) {
     return { added: 0, skipped: 0, why: "CSV boş görünüyor", nofx: 0, trades: state.trades };
-  const h = rows[0].map(x => String(x).trim().toLocaleLowerCase("tr")),
-    AL = {
-      tarih: [
-        "open time",
-        "open date/time",
-        "open date",
-        "date",
-        "time",
-        "zaman",
-        "tarih_saat",
-        "datetime",
-      ],
-      cikis_tarihi: [
-        "close time",
-        "close date/time",
-        "close date",
-        "close datetime",
-        "exit time",
-        "exit date/time",
-        "exit datetime",
-        "cikis_tarihi",
-        "çıkış zamanı",
-        "çıkış tarihi",
-        "cikis zamani",
-        "cikis tarihi",
-      ],
-      dcs: ["type", "direction", "side", "yon", "trend"],
-      sembol: ["symbol", "ticker", "enstruman", "instrument", "pair"],
-      hacim: ["volume", "size", "lot", "lots", "miktar", "quantity", "contract size"],
-      giris: ["open price", "openprice", "open", "entry", "price", "acilis"],
-      kapanis: ["close price", "closeprice", "close", "exit", "cikis"],
-      komisyon: ["commission", "fee", "fees", "komisyon"],
-      swap: ["swap"],
-      tp: ["t / p", "tp", "take profit", "takeprofit", "hedef", "target"],
-      sl: ["s / l", "sl", "stop loss", "stoploss", "stop"],
-    };
-  const nn = num;
-  const g = (r, k) => {
-    const i = h.indexOf(k);
-    return i >= 0 ? (r[i] ?? "") : "";
-  };
-  const gg = (r, k) => {
-    for (const c of [k].concat(AL[k] || [])) {
-      const i = h.indexOf(c);
-      if (i >= 0 && r[i] != null && String(r[i]).trim() !== "") return r[i];
+  }
+  const col = csvColumns(rows[0]);
+  const accounts = state.accounts.slice();
+
+  // Hesap adı → hesap. Ad boşsa ilk hesap; bilinmiyorsa yeni hesap oluşturulur.
+  const resolveAccount = name => {
+    const lower = name.toLocaleLowerCase("tr");
+    let account = name ? accounts.find(a => a.name.toLocaleLowerCase("tr") === lower) : null;
+    if (name && !account) {
+      account = { id: "a" + newId(), name, balance: 0, dl: 0, md: 0, cur: "" };
+      accounts.push(account);
     }
-    return "";
+    return account || accounts[0];
   };
+  // Aynı işlemi iki kez eklememek için kimlik anahtarı
+  const dupKey = t => [t.date, t.symbol, t.dir, t.entry, t.qty, t.acc || accounts[0].id].join("|");
+  const seen = new Set(state.trades.map(dupKey));
+  const trades = state.trades.slice();
+
   let added = 0,
     skipped = 0,
     why = null,
     nofx = 0;
-  const accs = state.accounts.slice(),
-    find = a => accs.find(x => x.name.toLocaleLowerCase("tr") === a.toLocaleLowerCase("tr"));
-  const key = t => [t.date, t.symbol, t.dir, t.entry, t.qty, t.acc || accs[0].id].join("|");
-  const seen = new Set(state.trades.map(key));
-  const trades = state.trades.slice();
-  for (let ri = 1; ri < rows.length; ri++) {
-    const r = rows[ri];
-    if (!r.some(c => String(c || "").trim())) continue;
-    const sym = String(gg(r, "sembol") || "")
-        .trim()
-        .toUpperCase(),
-      dRaw = String(gg(r, "tarih") || "").trim();
-    // FIX(5): toStamp çoklu boşlukları ve TR/ISO noktalı tarihleri normalize eder
-    const date = toStamp(dRaw);
-    if (!sym) {
-      skipped++;
-      why = why || "sembol sütunu bulunamadı";
+  const skip = reason => {
+    skipped++;
+    why = why || reason;
+  };
+
+  for (const row of rows.slice(1)) {
+    if (!row.some(c => String(c || "").trim())) continue; // boş satır
+    const { rec, error } = parseCsvRow(row, col, resolveAccount);
+    if (error) {
+      skip(error);
       continue;
     }
-    if (!dRaw) {
-      skipped++;
-      why = why || "tarih sütunu yok veya boş";
+    const key = dupKey(rec);
+    if (seen.has(key)) {
+      skip("çift kayıt (aynen zaten var)");
       continue;
     }
-    if (!date) {
-      skipped++;
-      why = why || "tarih okunamadı: " + dRaw;
-      continue;
-    }
-    let dir = String(gg(r, "dcs") || "")
-      .trim()
-      .toLocaleLowerCase("tr");
-    if (!dir) {
-      skipped++;
-      why = why || "yön sütunu yok (Type/Direction/Side)";
-      continue;
-    }
-    dir = ["short", "sell"].includes(dir) ? "SHORT" : "LONG";
-    const entry = num(gg(r, "giris")),
-      exitRaw = gg(r, "kapanis"),
-      exit = num(exitRaw);
-    if (exitRaw && exit == null) {
-      skipped++;
-      why = why || "kapanış fiyatı sayı değil";
-      continue;
-    }
-    const qty = num(gg(r, "hacim"));
-    if (qty == null) {
-      skipped++;
-      why = why || "hacim/lot bulunamadı";
-      continue;
-    }
-    const sl = num(gg(r, "sl")),
-      tp = num(gg(r, "tp"));
-    const hn = g(r, "hesap").trim();
-    let ac = hn ? find(hn) : null;
-    if (hn && !ac) {
-      ac = { id: "a" + newId(), name: hn, balance: 0, dl: 0, md: 0, cur: "" };
-      accs.push(ac);
-    }
-    const rec = {
-      id: newId(),
-      date,
-      symbol: sym,
-      dir,
-      entry,
-      exit,
-      qty,
-      stop: sl,
-      tp,
-      fees: (c => Math.max(0, Math.round((c - (nn(g(r, "swap")) || 0)) * 100) / 100))(
-        Math.abs(nn(gg(r, "komisyon")) || 0)
-      ),
-      mult:
-        nn(g(r, "carpan")) || (SYMS.find(x => x[0] === sym) ? SYMS.find(x => x[0] === sym)[1] : 1),
-      fx: (fxRaw => fxRaw || 1)(nn(g(r, "kur"))),
-      acc: (ac || accs[0]).id,
-      exitDate: (() => {
-        const s = toStamp(gg(r, "cikis_tarihi"));
-        return s;
-      })(),
-      plan: ["evet", "uydu", "yes", "1"].includes(
-        String(g(r, "plan") || "")
-          .trim()
-          .toLocaleLowerCase("tr")
-      )
-        ? "evet"
-        : String(g(r, "plan") || "").trim() === "hayır"
-          ? "hayır"
-          : "",
-      mist: String(g(r, "hata") || "").trim(),
-      setup: String(g(r, "setup") || "").trim(),
-      emo: String(g(r, "duygu") || "").trim(),
-      notes: String(g(r, "not") || "").trim(),
-      stop0: nn(g(r, "ilk_stop")),
-      rt: nn(g(r, "puan")),
-    };
-    if (rec.exitDate && rec.exitDate < rec.date) {
-      skipped++;
-      why = why || "çıkış zamanı girişten önce";
-      continue;
-    }
-    if (rec.exit == null) rec.exitDate = "";
-    const ve = validate(rec);
-    if (ve) {
-      skipped++;
-      why = why || ve;
-      continue;
-    }
-    const k = key(rec);
-    if (seen.has(k)) {
-      skipped++;
-      why = why || "çift kayıt (aynen zaten var)";
-      continue;
-    }
-    seen.add(k);
+    seen.add(key);
     trades.push(rec);
     added++;
-    // FIX(14): kur uyarısı yalnızca bu aktarımda eklenen işlemler için sayılır
-    const si = SYMS.find(x => x[0] === rec.symbol);
-    if (
-      si &&
-      si[2] === "Forex" &&
-      !rec.symbol.endsWith("USD") &&
-      nn(g(r, "kur")) == null &&
-      rec.exit != null
-    )
-      nofx++;
+    if (missingFxRate(rec, col.exact(row, "kur"))) nofx++;
   }
-  state.accounts = accs;
-  saveAccounts(accs);
+  state.accounts = accounts;
+  saveAccounts(accounts);
   state.trades = trades;
   return { added, skipped, why, nofx, trades };
 }
