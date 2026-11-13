@@ -1,6 +1,9 @@
 "use strict";
 let qcEmo="",qcNote="";
-function parseHash(){const h=location.hash.slice(1)||"/",q=h.split("?");const path=q[0]||"/";const params={};if(q[1])q[1].split("&").forEach(p=>{const[k,v]=p.split("=");params[k]=decodeURIComponent(v||"")});return{path,params}}
+function parseHash(){const h=location.hash.slice(1)||"/",q=h.split("?");const path=q[0]||"/";const params={};if(q[1])q[1].split("&").forEach(p=>{const[k,v]=p.split("=");params[dec(k)]=dec(v||"")});return{path,params}}
+// taslak, yalnızca işlem o günden beri değişmediyse geri yüklenir; "kirli" form ilk haline göre ölçülür
+function tradeSig(t){return t?JSON.stringify(fromTrade(t)):""}
+function formDirty(){const b=form.id&&state.trades.find(t=>t.id===form.id),ref=b?fromTrade(b):emptyForm();return Object.keys(form).some(k=>!k.startsWith("__")&&k!=="multAuto"&&(k!=="date"||b)&&form[k]!==ref[k])}
 const navKey=p=>p.startsWith("/trades")?"/trades":p;
 
 function render(){
@@ -12,11 +15,11 @@ const d=(()=>{try{return JSON.parse(localStorage.getItem("tj_draft")||"null")}ca
 if(form===null||form.__for!==path+(params.id||"")){
 if(params.id){const tr0=state.trades.find(t=>t.id===params.id);form=tr0?fromTrade(tr0):emptyForm();
 // FIX(4): yarım kalmış düzenleme taslaktan geri yüklenir
-if(d&&d.__editId===params.id)Object.assign(form,d,{date:form.date})}
+if(tr0&&d&&d.__editId===params.id&&d.__sig===tradeSig(tr0))Object.assign(form,d,{date:form.date})}
 else{const e=emptyForm();form=Object.assign(e,d&&d.__editId?{...d,__editId:null,id:undefined}:d||{},{date:e.date})}
 form.__for=path+(params.id||"")}
 }
-const html=path==="/"?viewHome():path==="/trades"?viewTrades():path==="/add"?viewAdd():path==="/insights"?viewInsights():path==="/more"?viewMore():path==="/more/accounts"?viewAccounts():path==="/more/tags"?viewTags():path==="/more/data"?viewMoreData():path.startsWith("/trades/")?viewTradeDetail(decodeURIComponent(path.slice(8))):viewHome();
+const html=path==="/"?viewHome():path==="/trades"?viewTrades():path==="/add"?viewAdd():path==="/insights"?viewInsights():path==="/more"?viewMore():path==="/more/accounts"?viewAccounts():path==="/more/tags"?viewTags():path==="/more/data"?viewMoreData():path.startsWith("/trades/")?viewTradeDetail(dec(path.slice(8))):viewHome();
 view.innerHTML=html;
 view.classList.remove("enter");void view.offsetWidth;
 [...view.querySelectorAll(".card,.empty-hero>*")].forEach((el,i)=>el.style.setProperty("--i",i));
@@ -38,11 +41,12 @@ const rec={id:form.id||newId(),date:form.date||now,symbol:sym,dir:form.dir,entry
 const old0=form.id?state.trades.find(t=>t.id===form.id):null;
 rec.qc=old0?(old0.qc||0):(form.qc||0);
 let chkToday=null;
-try{const s0=localStorage.getItem("tj_chk_"+new Date().toISOString().slice(0,10));if(typeof s0==="string"&&s0.length)chkToday=[...s0].filter(c=>c==="1").length}catch(e){}
+try{const s0=localStorage.getItem("tj_chk_"+todayStamp());if(typeof s0==="string"&&s0.length)chkToday=[...s0].filter(c=>c==="1").length}catch(e){}
 rec.chk=old0?old0.chk:chkToday;
 if(old0&&old0.grp)rec.grp=old0.grp;
 const qc=QCUR[sym]||(SYMS.find(x=>x[0]===sym)&&SYMS.find(x=>x[0]===sym)[2]==="Forex"&&!sym.endsWith("USD")?sym.slice(3,6):"");
-if(qc&&rec.fx===1&&ex0!=null){showFormErr("P&L kuru gerekli ("+qc+" → "+(state.prefsCur||"USD")+"). Gelişmiş → P&L kuru alanına gir.");return}
+const accCur=((accountOf(rec)||{}).cur||state.prefsCur||"USD").toUpperCase();
+if(qc&&qc!==accCur&&rec.fx===1&&ex0!=null){showFormErr("P&L kuru gerekli ("+qc+" → "+(state.prefsCur||"USD")+"). Gelişmiş → P&L kuru alanına gir.");return}
 const msg=validate(rec);
 if(msg){showFormErr(msg);const g=$("#symsug");if(g)g.innerHTML=symHint(true);return}
 if(ex0!=null&&!rec.exitDate)rec.exitDate=now;
@@ -58,7 +62,7 @@ if(i<0)toast("Kaydedildi")
 }
 
 function tradesToCsv(trades){
-const q=v=>{const s=String(v??"");return/^[=+\-@\t\r]/.test(s)&&!(s.trim()!==""&&Number.isFinite(Number(s)))?"'"+s:s};
+const q=v=>{let s=String(v??"");if(/^[=+\-@\t\r]/.test(s)&&!(s.trim()!==""&&Number.isFinite(Number(s))))s="'"+s;return/[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
 const head=["tarih","sembol","yon","hacim","giris","kapanis","komisyon","swap","tp","sl","ilk_stop","cikis_tarihi","carpan","kur","net_pnl","R","setup","duygu","hata","plan","puan","chk","not","hesap"];
 const lines=[head.join(",")];
 trades.forEach(t=>{lines.push([q(formatWhen(t.date)),q(t.symbol),t.dir,q(t.qty),q(t.entry),q(t.exit),q(t.fees||""),q(t.swap||""),q(t.tp),q(t.stop),q(t.stop0),q(t.exitDate?formatWhen(t.exitDate):""),q(t.mult||1),q(t.fx||1),q(pnl(t)),q(rr(t)!=null?Math.round(rr(t)*100)/100:""),q(t.setup),q(t.emo),q(t.mist),q(t.plan),q(t.rt||""),q(t.chk==null?"":t.chk),q(t.notes),q((accountOf(t)||{}).name||"")].join(","))});
@@ -118,7 +122,7 @@ const idx=state.trades.indexOf(t);state.trades.splice(idx,1);saveTrades(state.tr
 toast("Silindi",null,6000,{label:"Geri al",fn:()=>{state.trades.splice(idx,0,t);saveTrades(state.trades);render()}});return}
 if(act==="clone"){const t=state.trades.find(x=>x.id===actEl.dataset.id);if(!t)return;const c=fromTrade(t);delete c.id;form={...c,date:nowLocal(),__for:"/add"};location.hash="#/add";render();return}
 if(act==="clear"){if(!typedConfirm("TÜM veriler silinsin mi?"))return;
-const d=state.theme,f=state.fileName;try{localStorage.clear()}catch(e){}
+const d=state.theme,f=state.fileName;try{localStorage.clear()}catch(e){}wipeStores();saveTheme(d);
 Object.assign(state,{trades:[],accounts:[{id:"a1",name:"Ana hesap",balance:0,dl:0,md:0,cur:""}],tags:JSON.parse(JSON.stringify(DEFAULT_TAGS)),filterAccountId:"all",lastBackupAt:null,memoryOnly:false,file:"none",fileName:f,theme:d});
 saveBackupStamp("");location.hash="#/";render();return}
 if(act==="closetrade"){const t=state.trades.find(x=>x.id===actEl.dataset.id);if(!t||t.exit!=null)return;const p=num($("#cx").value),q=$("#cq")?num($("#cq").value):null,e=$("#fe-cq");
@@ -186,12 +190,12 @@ let accTimer=null;
 window.addEventListener("hashchange",()=>{
 if(!location.hash.startsWith("#/add")){
 // FIX(4): düzenleme formları da taslak olarak korunur (anahtar: __editId)
-if(form&&form.__for&&form.__for.startsWith("/add")&&Object.keys(form).some(k=>!k.startsWith("__")&&form[k]!==emptyForm()[k])){try{localStorage.setItem("tj_draft",JSON.stringify({...form,__editId:form.id||null}))}catch(e){}}
+if(form&&form.__for&&form.__for.startsWith("/add")&&formDirty()){try{localStorage.setItem("tj_draft",JSON.stringify({...form,__editId:form.id||null,__sig:form.id?tradeSig(state.trades.find(t=>t.id===form.id)):""}))}catch(e){}}
 form=null}
 render()});
 
 // FIX(9): sekmeler arası senkron etiketleri de kapsar
-window.addEventListener("storage",e=>{if(e.key!=="tj_ts")return;(async()=>{const t=await kvGet("trades"),a=await kvGet("accounts"),g=await kvGet("tags");if(Array.isArray(t))state.trades=t;if(Array.isArray(a)&&a.length)state.accounts=a;if(g&&typeof g==="object"&&!Array.isArray(g))state.tags=normTags(g);render()})()});
+window.addEventListener("storage",e=>{if(e.key!=="tj_ts")return;(async()=>{applyStores(await readStores());render()})()});
 
 (async()=>{await loadAll();await fileInit();render()})();
 // FIX(18): PWA — yüklenebilirlik + çevrimdışı (yalnızca gerçek tarayıcıda)

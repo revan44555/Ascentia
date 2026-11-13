@@ -15,7 +15,7 @@ const QCUR={GER40:"EUR",FRA40:"EUR",UK100:"GBP",JP225:"JPY"};
 function bigPx(sym){const i=SYMS.find(x=>x[0]===sym);return!!i&&(i[2]==="Endeks"||i[2]==="Altın"||(i[2]==="Vadeli"&&sym!=="CL")||/^(BTC|ETH)/.test(sym))}
 // FIX(7): bilinmeyen sembolde de binlik ayracı tutarlı şekilde sıfırlanır
 // ("21.500" bilinen endeksse 21500, bilinmeyen sembolde de 21500 olur — 21.5 değil)
-function fixThou(rawSym,v){const sf=symFind(rawSym),sym=sf.exact||sf.auto;v=String(v==null?"":v).trim();if(!/^\d{1,3}(\.\d{3})+$/.test(v))return v;return (sym&&bigPx(sym))||!sym?v.replace(/\./g,""):v}
+function fixThou(rawSym,v){v=String(v==null?"":v).trim();if(!String(rawSym||"").trim())return v;const sf=symFind(rawSym),sym=sf.exact||sf.auto;if(!/^\d{1,3}(\.\d{3})+$/.test(v))return v;if(sym)return bigPx(sym)?v.replace(/\./g,""):v;return /^0\./.test(v)?v:v.replace(/\./g,"")}
 function liveHint(){const e=num(form.entry),st=num(form.stop),t=num(form.tp),q=num(form.qty),x=num(form.exit);let m="";
 if(e!=null&&st!=null&&num(form.stop0)==null&&x==null){if(form.dir==="LONG"&&st>=e)m="Long için stop girişin altında olmalı.";else if(form.dir==="SHORT"&&st<=e)m="Short için stop girişin üstünde olmalı."}
 if(!m&&e!=null&&t!=null){if(form.dir==="LONG"&&t<=e)m="Long için hedef girişin üstünde olmalı.";else if(form.dir==="SHORT"&&t>=e)m="Short için hedef girişin altında olmalı."}
