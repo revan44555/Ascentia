@@ -104,7 +104,7 @@ if(act==="unlinkfile"){unlinkFile();toast("Otomatik kayıt kapatıldı");return}
 if(act==="fileresume"){resumeFile();return}
 if(act==="calprev"){calOff--;render();return}
 if(act==="calnext"){calOff++;render();return}
-if(act==="more"){listState.limit+=50;const tl=$("#tradeList");if(tl)tl.innerHTML=tradesListHtml();return}
+if(act==="more"){listState.limit+=30;const tl=$("#tradeList");if(tl)tl.innerHTML=tradesListHtml();return}
 if(act==="addacc"){const i=document.querySelector("[data-newacc]");const n=(i&&i.value||"").trim().slice(0,24);if(!n){toast("Hesap adı gir");return}state.accounts.push({id:"a"+Date.now().toString(36),name:n,balance:0,dl:0,md:0,cur:""});saveAccounts(state.accounts);render();return}
 if(act==="delacc"){const id=actEl.dataset.id;if(state.accounts.length<=1){toast("Son hesap silinemez","err");return}
 if(state.trades.some(t=>accountId(t)===id)){toast("Bu hesapta işlem var","err");return}
