@@ -1,5 +1,7 @@
 // Gerçek Chromium (Playwright) uçtan uca testi: bağımlılıksız statik sunucu açar, 390px mobil görünümde
 // gerçek tıklamalarla ana akışları sınar. Çalıştır: npm run test:e2e
+// Tarayıcı Asia/Baku saatinde açılır; beklenen zamanlar da aynı saat diliminde hesaplansın (CI UTC çalışır)
+process.env.TZ = "Asia/Baku";
 const { chromium } = require("playwright");
 const http = require("http"),
   fs = require("fs"),
