@@ -1,93 +1,133 @@
 "use strict";
-function planLine(todayTrades,weekTrades){
-const tg=l=>unitize(l).filter(t=>t.plan==="evet"||t.plan==="hayır");
-const tt=tg(todayTrades),y=tt.filter(t=>t.plan==="evet").length;
-const a=adherence(todayTrades);if(a!=null)return Math.round(a)+"%";
-const w=adherence(weekTrades);
-if(w!=null)return "Hafta %"+Math.round(w)+(tt.length?" · bugün "+y+"/"+tt.length:"");
-if(tt.length)return "Bugün "+y+"/"+tt.length;
-return `<a href="#/trades" class="plan-cta">Etiketle</a>`}
-function bigMoney(n){const s=money(n),i=s.lastIndexOf(",");return i<0?s:s.slice(0,i)+`<span class="cents">${s.slice(i)}</span>`}
-function plHidden(){try{return localStorage.getItem("tj_hidepl")==="1"}catch(e){return false}}
-function viewHome(){
-if(!state.trades.length){
-return `<div class="empty-hero">
+function planLine(todayTrades, weekTrades) {
+  const tg = l => unitize(l).filter(t => t.plan === "evet" || t.plan === "hayır");
+  const tt = tg(todayTrades),
+    y = tt.filter(t => t.plan === "evet").length;
+  const a = adherence(todayTrades);
+  if (a != null) return Math.round(a) + "%";
+  const w = adherence(weekTrades);
+  if (w != null)
+    return "Hafta %" + Math.round(w) + (tt.length ? " · bugün " + y + "/" + tt.length : "");
+  if (tt.length) return "Bugün " + y + "/" + tt.length;
+  return `<a href="#/trades" class="plan-cta">Etiketle</a>`;
+}
+function bigMoney(n) {
+  const s = money(n),
+    i = s.lastIndexOf(",");
+  return i < 0 ? s : s.slice(0, i) + `<span class="cents">${s.slice(i)}</span>`;
+}
+function plHidden() {
+  try {
+    return localStorage.getItem("tj_hidepl") === "1";
+  } catch (e) {
+    return false;
+  }
+}
+function viewHome() {
+  if (!state.trades.length) {
+    return `<div class="empty-hero">
 <svg class="mark" viewBox="0 0 120 40" aria-hidden="true"><path class="draw" pathLength="1" d="M2 32 C 20 30, 26 14, 44 18 S 70 34, 84 20 S 106 6, 118 8"/></svg><p class="eyebrow" lang="en">Ascentia</p>
 <h1>Bugünü yaz.</h1>
 <p class="sub">İşlem, risk, R ve duygu — hepsi bu cihazda. Sunucuya gitmez.</p>
 <div class="acts">
 <a href="#/add" class="btn lg primary">İlk işlemi kaydet</a>
 <a href="#/more/data" class="btn lg secondary">CSV veya yedekten içe aktar</a>
-</div></div>`}
-const trades=filterAccount(state.trades,state.filterAccountId);
-const today=todayStamp(),week=weekStartStamp();
-const todayTrades=trades.filter(t=>ek(t).startsWith(today));
-const weekTrades=trades.filter(t=>ek(t)>=week);
-const todayNet=todayTrades.reduce((s,t)=>s+(pnl(t)??0),0);
-const weekSum=summarize(weekTrades);
-const leak=topLeak(trades),best=bestSetup(trades);
-const hide=plHidden();
-const recent=trades.filter(t=>t.exit!=null).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
-const opens=trades.filter(t=>t.exit==null).sort((a,b)=>a.date.localeCompare(b.date));
-return `<div class="stack home-view${hide?" pl-hide":""}">
-<header class="page-h home-page-h"><div class="brand-lockup"><span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 25 16 5l11 20M10 18h12" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="brand-copy"><span class="brand-name">Ascentia</span><span class="brand-caption">TRADE JOURNAL</span></span></div><div class="home-tools"><button type="button" class="home-settings" data-act="hidepl" aria-pressed="${hide}" aria-label="${hide?"P&amp;L göster":"P&amp;L gizle"}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${hide?'<path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0 1 12 6c6 0 10 6 10 6a17 17 0 0 1-3.2 3.7M6.6 6.7C3.9 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 4.4-1"/>':'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'}</svg></button><a href="#/more" class="home-settings" aria-label="Ayarlar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z"/></svg></a></div></header>
-${state.memoryOnly?`<div class="card" style="font-size:15px;color:var(--muted)">Depolama kullanılamıyor. Veriler yalnızca bu oturumda durur.</div>`:""}
-<div class="card hero"><div class="hero-overline"><p class="lbl">GERÇEKLEŞMİŞ P&amp;L</p><span class="hero-tag"><i></i> BUGÜN</span></div><p class="mono big blur-pl ${todayNet>0?"up":todayNet<0?"dn":"muted"}">${todayTrades.some(t=>pnl(t)!=null)?bigMoney(todayNet):"—"}</p>
+</div></div>`;
+  }
+  const trades = filterAccount(state.trades, state.filterAccountId);
+  const today = todayStamp(),
+    week = weekStartStamp();
+  const todayTrades = trades.filter(t => ek(t).startsWith(today));
+  const weekTrades = trades.filter(t => ek(t) >= week);
+  const todayNet = todayTrades.reduce((s, t) => s + (pnl(t) ?? 0), 0);
+  const weekSum = summarize(weekTrades);
+  const leak = topLeak(trades),
+    best = bestSetup(trades);
+  const hide = plHidden();
+  const recent = trades
+    .filter(t => t.exit != null)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
+  const opens = trades.filter(t => t.exit == null).sort((a, b) => a.date.localeCompare(b.date));
+  return `<div class="stack home-view${hide ? " pl-hide" : ""}">
+<header class="page-h home-page-h"><div class="brand-lockup"><span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 25 16 5l11 20M10 18h12" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="brand-copy"><span class="brand-name">Ascentia</span><span class="brand-caption">TRADE JOURNAL</span></span></div><div class="home-tools"><button type="button" class="home-settings" data-act="hidepl" aria-pressed="${hide}" aria-label="${hide ? "P&amp;L göster" : "P&amp;L gizle"}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${hide ? '<path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0 1 12 6c6 0 10 6 10 6a17 17 0 0 1-3.2 3.7M6.6 6.7C3.9 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 4.4-1"/>' : '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'}</svg></button><a href="#/more" class="home-settings" aria-label="Ayarlar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z"/></svg></a></div></header>
+${state.memoryOnly ? `<div class="card" style="font-size:15px;color:var(--muted)">Depolama kullanılamıyor. Veriler yalnızca bu oturumda durur.</div>` : ""}
+<div class="card hero"><div class="hero-overline"><p class="lbl">GERÇEKLEŞMİŞ P&amp;L</p><span class="hero-tag"><i></i> BUGÜN</span></div><p class="mono big blur-pl ${todayNet > 0 ? "up" : todayNet < 0 ? "dn" : "muted"}">${todayTrades.some(t => pnl(t) != null) ? bigMoney(todayNet) : "—"}</p>
 <div class="divide" style="margin-top:8px">
 <div class="rowline"><span>Bugün işlem</span><span class="mono">${todayTrades.length}</span></div>
 <div class="rowline"><span>Hafta</span><span class="mono blur-pl ${pnlClass(weekSum.net)}">${money(weekSum.net)}</span></div>
-<div class="rowline"><span>Plan uyumu</span><span class="mono">${planLine(todayTrades,weekTrades)}</span></div>
-${best&&best.net>0?`<div class="rowline"><span>En iyi setup</span><span>${esc(best.key)} <span class="mono ${pnlClass(best.net)}">${money(best.net)}</span></span></div>`:""}
-${leak?`<div class="rowline"><span>En büyük sızıntı</span><span>${esc(leak.key)} <span class="mono dn">${money(leak.net)}</span></span></div>`:""}
+<div class="rowline"><span>Plan uyumu</span><span class="mono">${planLine(todayTrades, weekTrades)}</span></div>
+${best && best.net > 0 ? `<div class="rowline"><span>En iyi setup</span><span>${esc(best.key)} <span class="mono ${pnlClass(best.net)}">${money(best.net)}</span></span></div>` : ""}
+${leak ? `<div class="rowline"><span>En büyük sızıntı</span><span>${esc(leak.key)} <span class="mono dn">${money(leak.net)}</span></span></div>` : ""}
 </div></div>
 ${quickEvalCard()}${propCard()}
 ${reviewCard()}
-${opens.length?`<div class="gap2"><h2 class="h2t">Açık pozisyonlar (${opens.length})</h2>${opens.map(tradeCard).join("")}</div>`:""}
+${opens.length ? `<div class="gap2"><h2 class="h2t">Açık pozisyonlar (${opens.length})</h2>${opens.map(tradeCard).join("")}</div>` : ""}
 <div class="sechead">
 <h2 class="h2t">Son işlemler</h2>
 <a href="#/trades" class="muted" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;min-height:44px;padding:0 4px">Tümü <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
 </div>
 <div class="gap2">${recent.map(tradeCard).join("")}</div>
-${state.file==="need"?`<div class="card"><p style="font-weight:500">Otomatik kaydetme duraklatıldı</p><p class="muted" style="margin-top:4px;font-size:15px">${esc(state.fileName)} dosyasına yazmak için izin ver.</p><button type="button" class="btn lg secondary" style="margin-top:12px" data-act="fileresume">Devam et</button></div>`:""}
+${state.file === "need" ? `<div class="card"><p style="font-weight:500">Otomatik kaydetme duraklatıldı</p><p class="muted" style="margin-top:4px;font-size:15px">${esc(state.fileName)} dosyasına yazmak için izin ver.</p><button type="button" class="btn lg secondary" style="margin-top:12px" data-act="fileresume">Devam et</button></div>` : ""}
 
-</div>`}
+</div>`;
+}
 
-const listState={q:"",side:"",result:"",limit:20};
-function filteredTrades(){let list=filterAccount(state.trades,state.filterAccountId).filter(inRange);
-const needle=listState.q.trim().toLowerCase();
-if(needle){const nu=listState.q.trim().toUpperCase().replace(/[^A-Z0-9]/g,""),al=ALIAS[nu]?ALIAS[nu].toLowerCase():"";list=list.filter(t=>{const h=[t.symbol,t.setup,t.emo,t.mist,t.notes].join(" ").toLowerCase();return h.includes(needle)||(al&&h.includes(al))})}
-if(listState.side)list=list.filter(t=>t.dir===listState.side);
-if(listState.result==="open")list=list.filter(t=>t.exit==null);
-if(listState.result==="win")list=list.filter(t=>(pnl(t)??0)>0);
-if(listState.result==="loss")list=list.filter(t=>(pnl(t)??0)<0);
-return list.slice().sort((a,b)=>b.date.localeCompare(a.date))}
-function tradesListHtml(){const list=filteredTrades();
-if(!list.length)return `<p class="muted" style="padding:64px 0;text-align:center;font-size:15px">${state.trades.length?"Eşleşen işlem yok.":"Henüz işlem yok. Ekle sekmesinden ilk işlemini kaydet."}</p>`;
-return `<div class="gap2">${list.slice(0,listState.limit).map(tradeCard).join("")}</div>${list.length>listState.limit?`<button type="button" class="btn lg secondary" style="margin-top:8px" data-act="more">Daha fazla göster (${list.length-listState.limit})</button>`:""}`}
-function viewTrades(){
-return `<div class="stack4">
+const listState = { q: "", side: "", result: "", limit: 20 };
+function filteredTrades() {
+  let list = filterAccount(state.trades, state.filterAccountId).filter(inRange);
+  const needle = listState.q.trim().toLowerCase();
+  if (needle) {
+    const nu = listState.q
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, ""),
+      al = ALIAS[nu] ? ALIAS[nu].toLowerCase() : "";
+    list = list.filter(t => {
+      const h = [t.symbol, t.setup, t.emo, t.mist, t.notes].join(" ").toLowerCase();
+      return h.includes(needle) || (al && h.includes(al));
+    });
+  }
+  if (listState.side) list = list.filter(t => t.dir === listState.side);
+  if (listState.result === "open") list = list.filter(t => t.exit == null);
+  if (listState.result === "win") list = list.filter(t => (pnl(t) ?? 0) > 0);
+  if (listState.result === "loss") list = list.filter(t => (pnl(t) ?? 0) < 0);
+  return list.slice().sort((a, b) => b.date.localeCompare(a.date));
+}
+function tradesListHtml() {
+  const list = filteredTrades();
+  if (!list.length)
+    return `<p class="muted" style="padding:64px 0;text-align:center;font-size:15px">${state.trades.length ? "Eşleşen işlem yok." : "Henüz işlem yok. Ekle sekmesinden ilk işlemini kaydet."}</p>`;
+  return `<div class="gap2">${list.slice(0, listState.limit).map(tradeCard).join("")}</div>${list.length > listState.limit ? `<button type="button" class="btn lg secondary" style="margin-top:8px" data-act="more">Daha fazla göster (${list.length - listState.limit})</button>` : ""}`;
+}
+function viewTrades() {
+  return `<div class="stack4">
 <header class="page-h" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
 <div><p class="eyebrow">Defter</p><h1>İşlemler</h1></div>
 </header>
 <div class="searchwrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 <input class="inp" aria-label="Ara" placeholder="Sembol, setup, not…" value="${esc(listState.q)}" data-lq="1"></div>
-<details class="filt"${(state.filterAccountId!=="all"||RANGE!=="all"||listState.side||listState.result)?" open":""}><summary>Filtreler</summary><div class="s3" style="margin-top:8px">${accChips()}${rangeChips()}<div class="chips scroll">
+<details class="filt"${state.filterAccountId !== "all" || RANGE !== "all" || listState.side || listState.result ? " open" : ""}><summary>Filtreler</summary><div class="s3" style="margin-top:8px">${accChips()}${rangeChips()}<div class="chips scroll">
 
-<button type="button" class="chip ${listState.side==="LONG"?"on":"off"}" data-lchip="side:LONG">Long</button>
-<button type="button" class="chip ${listState.side==="SHORT"?"on":"off"}" data-lchip="side:SHORT">Short</button>
-<button type="button" class="chip ${listState.result==="win"?"on":"off"}" data-lchip="result:win">Kazanan</button>
-<button type="button" class="chip ${listState.result==="loss"?"on":"off"}" data-lchip="result:loss">Kaybeden</button>
-<button type="button" class="chip ${listState.result==="open"?"on":"off"}" data-lchip="result:open">Açık</button>
+<button type="button" class="chip ${listState.side === "LONG" ? "on" : "off"}" data-lchip="side:LONG">Long</button>
+<button type="button" class="chip ${listState.side === "SHORT" ? "on" : "off"}" data-lchip="side:SHORT">Short</button>
+<button type="button" class="chip ${listState.result === "win" ? "on" : "off"}" data-lchip="result:win">Kazanan</button>
+<button type="button" class="chip ${listState.result === "loss" ? "on" : "off"}" data-lchip="result:loss">Kaybeden</button>
+<button type="button" class="chip ${listState.result === "open" ? "on" : "off"}" data-lchip="result:open">Açık</button>
 </div></div></details>
 <div id="tradeList">${tradesListHtml()}</div>
-</div>`}
+</div>`;
+}
 // FIX(19): son 72 saatte kapanan, değerlendirilmemiş işlem için hızlı duygu+not kartı
-function quickEvalCard(){
-const cut=new Date(Date.now()-72*36e5);
-const t=filterAccount(state.trades,state.filterAccountId).filter(x=>x.exit!=null&&!x.qc&&new Date(ek(x))>cut).sort((a,b)=>ek(b).localeCompare(ek(a)))[0];
-if(!t)return"";
-return `<div class="card s3"><p class="sect-h">Anı değerlendir</p>
+function quickEvalCard() {
+  const cut = new Date(Date.now() - 72 * 36e5);
+  const t = filterAccount(state.trades, state.filterAccountId)
+    .filter(x => x.exit != null && !x.qc && new Date(ek(x)) > cut)
+    .sort((a, b) => ek(b).localeCompare(ek(a)))[0];
+  if (!t) return "";
+  return `<div class="card s3"><p class="sect-h">Anı değerlendir</p>
 <p class="subtle" style="font-size:14px">${esc(t.symbol)} işlemi kapanalı birkaç saat oldu — o sırada ne hissettin?</p>
-<div class="chips scroll">${state.tags.emos.map(x=>`<button type="button" aria-pressed="${qcEmo===x}" class="chip ${qcEmo===x?"on":"off"}" data-qcemo="${esc(x)}">${esc(x)}</button>`).join("")}</div>
+<div class="chips scroll">${state.tags.emos.map(x => `<button type="button" aria-pressed="${qcEmo === x}" class="chip ${qcEmo === x ? "on" : "off"}" data-qcemo="${esc(x)}">${esc(x)}</button>`).join("")}</div>
 <textarea class="inp" rows="2" id="qcNote" placeholder="Bir cümleyle o anı anlat (isteğe bağlı)" aria-label="Anı notu">${esc(qcNote)}</textarea>
-<button type="button" class="btn lg primary" data-act="qcsave" data-id="${esc(t.id)}">Kaydet</button></div>`}
+<button type="button" class="btn lg primary" data-act="qcsave" data-id="${esc(t.id)}">Kaydet</button></div>`;
+}
