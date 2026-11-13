@@ -67,7 +67,7 @@ function load(store) {
   }
   const names = ["num", "pnl", "risk", "rr", "validate", "summarize", "breakdown", "adherence", "normTrade", "restoreJson", "importCsv", "loadAll",
     "saveTrades", "saveAccounts", "saveTags", "state", "sessionOf", "monthRows", "applyPartial", "tradesToCsv", "backupJson", "render", "accountId", "DEFAULT_TAGS", "TRADES_KEY", "unitize",
-    "fixThou", "toStamp", "jsonmerge", "insightsCard", "propStatus", "propCard", "limitBanner", "distCards", "saveForm", "emptyForm", "fromTrade", "form", "wipeStores"];
+    "fixThou", "toStamp", "jsonmerge", "insightsCard", "propStatus", "propCard", "limitBanner", "distCards", "saveForm", "emptyForm", "fromTrade", "form", "wipeStores", "readStores"];
   const T = vm.runInContext("({" + names.map(n => `${n}:typeof ${n}!=='undefined'?${n}:undefined`).join(",") + "})", ctx);
   return { T, ctx, env, store };
 }
@@ -374,7 +374,8 @@ test("F2", "jsonmerge hesap limitlerini korur", () => {
 test("F4", "Yarım kalmış düzenleme taslaktan geri yüklenir", () => {
   const { T, ctx } = load(); withAcc(T);
   T.state.trades = [{ ...base, id: "P", notes: "eski not" }];
-  ctx.localStorage.setItem("tj_draft", JSON.stringify({ ...base, id: "P", __editId: "P", notes: "yeni not", symbol: "NAS100" }));
+  const sig = vm.runInContext('tradeSig(state.trades[0])', ctx);
+  ctx.localStorage.setItem("tj_draft", JSON.stringify({ ...base, id: "P", __editId: "P", __sig: sig, notes: "yeni not", symbol: "NAS100" }));
   ctx.location.hash = "#/add?id=P";
   ctx.render();
   const f = vm.runInContext("form", ctx);
@@ -449,7 +450,7 @@ test("F15", "Saat dağılımı kartı çıkış zamanına göre etiketlenir", ()
 });
 
 // ===== Yama 17-20 regresyon testleri (5) =====================================
-test("F17","chk: kontrol listesi '1111' saveForm'u patlatmaz, chk=4",()=>{const{T,ctx}=load();withAcc(T);ctx.localStorage.setItem("tj_chk_"+new Date().toISOString().slice(0,10),"1111");vm.runInContext('form=emptyForm();form.symbol="EURUSD";form.entry="1.1";form.qty="1";form.stop="1.095";form.exit="1.105";form.__for="/add";',ctx);ctx.saveForm();expect(T.state.trades.length===1&&T.state.trades[0].chk===4,"chk="+(T.state.trades[0]&&T.state.trades[0].chk))});
+test("F17","chk: kontrol listesi '1111' saveForm'u patlatmaz, chk=4",()=>{const{T,ctx}=load();withAcc(T);ctx.localStorage.setItem("tj_chk_"+ctx.todayStamp(),"1111");vm.runInContext('form=emptyForm();form.symbol="EURUSD";form.entry="1.1";form.qty="1";form.stop="1.095";form.exit="1.105";form.__for="/add";',ctx);ctx.saveForm();expect(T.state.trades.length===1&&T.state.trades[0].chk===4,"chk="+(T.state.trades[0]&&T.state.trades[0].chk))});
 test("PWA","manifest geçerli, ikonlar ve maskable mevcut",()=>{const m=JSON.parse(fs.readFileSync(path.join(DIR,"manifest.json"),"utf8"));expect(m.display==="standalone"&&Array.isArray(m.icons)&&m.icons.some(i=>i.purpose==="maskable"),"manifest alanları");for(const ic of m.icons)expect(fs.existsSync(path.join(DIR,ic.src)),"ikon yok: "+ic.src)});
 test("PWA","sw.js sözdizimi geçerli, install/fetch handlerları var",()=>{const s=fs.readFileSync(path.join(DIR,"sw.js"),"utf8");new vm.Script(s);expect(/install/.test(s)&&/fetch/.test(s)&&/caches\.open/.test(s),"handler eksik")});
 test("QC","son kapanan işlem için anı kartı çıkar; qc=1 olunca kalkar",()=>{const{T,ctx}=load();withAcc(T);const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());const iso=n.toISOString().slice(0,16);T.state.trades=[{...base,id:"Q1",date:iso,exitDate:iso}];let h=vm.runInContext("viewHome()",ctx);expect(/Anı değerlendir/.test(h)&&/data-act="qcsave"/.test(h),"kart yok");T.state.trades[0].qc=1;h=vm.runInContext("viewHome()",ctx);expect(!/Anı değerlendir/.test(h),"kart hâlâ var")});
@@ -485,6 +486,55 @@ test("F24", "Kur: kotasyon para birimi hesap para birimiyle aynıysa kur istenme
   expect(a.T.state.trades.length === 1, "TRY hesabında USDTRY reddedildi");
   const b = load(); b.T.state.accounts = [{ id: "a1", name: "USD", balance: 1000, cur: "USD" }]; mk(b.ctx); b.ctx.saveForm();
   expect(b.T.state.trades.length === 0, "USD hesabında kursuz USDTRY kabul edildi");
+});
+
+// ===== Yama 22 regresyon testleri =============================================
+test("F25", "CSV: yön sütunu yoksa satır atlanır ve neden söylenir (fiyattan yön tahmin edilmez)", () => {
+  const { T } = load(); withAcc(T);
+  const r = T.importCsv("Date,Symbol,Volume,Open Price,Close Price\n2026.10.01 10:00,EURUSD,1,1.1000,1.0950\n");
+  expect(r.added === 0 && r.skipped === 1 && /yön/i.test(r.why || ""), JSON.stringify(r));
+});
+test("F26", "fixThou: sembol boşken dokunmaz; bilinmeyen sembolde 0.xxx ondalık kalır; endekste binlik temizlenir", () => {
+  const { T } = load();
+  expect(T.fixThou("", "1.084") === "1.084", "boş sembol: " + T.fixThou("", "1.084"));
+  expect(T.fixThou("DOGEUSDT", "0.123") === "0.123", "0.123: " + T.fixThou("DOGEUSDT", "0.123"));
+  expect(T.fixThou("BIST100", "21.500") === "21500" && T.fixThou("NAS100", "21.500") === "21500", "binlik");
+  expect(T.fixThou("EURUSD", "1.084") === "1.084", "forex");
+});
+test("F27", "JSON birleştirme: işlem yedekteki hesap ID'sinden doğru hesaba (adla) eşlenir", () => {
+  const { T } = load();
+  T.state.accounts = [{ id: "a1", name: "Ana", balance: 0 }, { id: "a2", name: "Prop", balance: 0 }]; T.state.trades = [];
+  const r = T.jsonmerge({ accounts: [{ id: "a1", name: "Ana" }, { id: "a2", name: "Prop" }], trades: [{ ...base, id: "m1", acc: "a2" }] });
+  expect(r.added === 1 && T.state.trades[0].acc === "a2", "acc=" + (T.state.trades[0] && T.state.trades[0].acc));
+  // yedekte farklı ID, aynı ad → bu defterdeki hesaba gider
+  T.state.trades = [];
+  T.jsonmerge({ accounts: [{ id: "zz9", name: "Prop" }], trades: [{ ...base, id: "m2", acc: "zz9" }] });
+  expect(T.state.trades[0].acc === "a2", "adla eşleşmedi: " + T.state.trades[0].acc);
+});
+test("F28", "Düzenleme taslağı: işlem sonradan değiştiyse eski taslak yok sayılır (çıkış silinmez)", () => {
+  const { T, ctx } = load(); withAcc(T);
+  T.state.trades = [{ ...base, id: "P", exit: null, exitDate: "" }];
+  const open = T.state.trades[0], sig = vm.runInContext("tradeSig(state.trades[0])", ctx);
+  ctx.localStorage.setItem("tj_draft", JSON.stringify({ ...T.fromTrade(open), __editId: "P", __sig: sig, notes: "taslak" }));
+  open.exit = 1.105; open.exitDate = "2026-10-01T12:00";           // pozisyon sonradan kapatıldı
+  ctx.location.hash = "#/add?id=P"; vm.runInContext("form=null", ctx); ctx.render();
+  const f = vm.runInContext("form", ctx);
+  expect(f.exit === "1.105" && f.notes !== "taslak", "exit=" + JSON.stringify(f.exit) + " notes=" + f.notes);
+});
+test("F29", "Bozuk URL kodu (%) render'ı çökertmez", () => {
+  const { T, ctx } = load(); withAcc(T);
+  for (const h of ["#/add?id=%", "#/trades/%E0%A4%A", "#/add?%=%"]) { ctx.location.hash = h; try { ctx.render() } catch (e) { throw new Error(h + " → " + e.name) } }
+});
+test("F30", "Kontrol listesi günü yerel tarihe göre (UTC toISOString kullanılmaz)", () => {
+  const a = fs.readFileSync(path.join(DIR, "js", "app.js"), "utf8") + fs.readFileSync(path.join(DIR, "js", "view-insights.js"), "utf8");
+  expect(!/tj_chk_"\+new Date\(\)\.toISOString/.test(a), "UTC anahtarı kaldı");
+});
+test("F31", "Sekme senkronu: IndexedDB eskiyse localStorage'taki yeni veri okunur", async () => {
+  const s = newStore(); const a = load(s); withAcc(a.T);
+  a.T.saveTrades([{ ...base, id: "A" }, { ...base, id: "B" }]); await sleep(40);
+  s.idb.set("trades", [{ ...base, id: "A" }]); s.idb.set("ts:trades", 1);   // IDB henüz yazılmamış gibi
+  const b = load(s); const R = await b.T.readStores();
+  expect(R.trades.length === 2, "okunan işlem " + R.trades.length + " (2 olmalı)");
 });
 
 // ---- çalıştır ----------------------------------------------------------------

@@ -27,7 +27,7 @@ async function unlinkFile(){fh=null;state.file="none";state.fileName="";await kv
 
 const state={trades:[],accounts:[{id:"a1",name:"Ana hesap",balance:0}],tags:JSON.parse(JSON.stringify(DEFAULT_TAGS)),theme:"dark",filterAccountId:"all",lastBackupAt:null,durable:false,memoryOnly:false,file:"none",fileName:""};
 function normTags(o){const L=(a,d)=>Array.isArray(a)&&a.length?a.map(String):d.slice();return{setups:L(o.setups,DEFAULT_TAGS.setups),emos:L(o.emos,DEFAULT_TAGS.emos),mists:L(o.mists,DEFAULT_TAGS.mists),syms:Array.isArray(o.syms)?o.syms.map(String):[]}}
-async function loadAll(){
+async function readStores(){
 const pj=k=>{try{return JSON.parse(lsGet(k)||"null")}catch(e){return null}};
 const tsL=k=>Number(lsGet("tj_ts:"+k)||lsGet("tj_ts")||0);
 const tsI=async k=>Number((await kvGet("ts:"+k))||(await kvGet("ts"))||0);
@@ -37,9 +37,10 @@ let iT=null,iA=null,iG=null;try{const v=await kvGet("trades");if(Array.isArray(v
 let lT=pj(TRADES_KEY);if(!Array.isArray(lT))lT=null;
 let lA=pj(ACC_KEY);if(!Array.isArray(lA)||!lA.length)lA=null;
 const tg=pj(TAGS_KEY);const lG=tg&&typeof tg==="object"?normTags({setups:tg.s,emos:tg.e,mists:tg.m,syms:tg.y}):null;
-state.trades=(await pick(iT,lT,"trades"))||[];
-const ac=await pick(iA,lA,"accounts");if(ac)state.accounts=ac;{const c=state.accounts.find(a=>a.cur);if(c)state.prefsCur=c.cur}
-const tags=await pick(iG,lG,"tags");if(tags)state.tags=tags;
+return{trades:await pick(iT,lT,"trades"),accounts:await pick(iA,lA,"accounts"),tags:await pick(iG,lG,"tags")}}
+function applyStores(R){state.trades=R.trades||[];if(R.accounts)state.accounts=R.accounts;{const c=state.accounts.find(a=>a.cur);if(c)state.prefsCur=c.cur}if(R.tags)state.tags=R.tags}
+async function loadAll(){
+applyStores(await readStores());
 state.theme=lsGet(THEME_KEY)==="light"?"light":"dark";
 state.lastBackupAt=Number(lsGet(BACKUP_KEY)||0)||null;
 try{if(navigator.storage&&navigator.storage.persisted){state.durable=await navigator.storage.persisted();if(!state.durable&&navigator.storage.persist)navigator.storage.persist().then(v=>{state.durable=v}).catch(()=>{})}}catch(e){}
@@ -60,7 +61,9 @@ for(const a of(raw.accounts||[])){if(!find(a.name))accs.push({id:String(a.id||"a
 const key=t=>[t.date,t.symbol,t.dir,t.entry,t.qty,t.acc||accs[0].id].join("|");
 const seen=new Set(state.trades.map(key));
 let added=0,skipped=0;
-for(const x of raw.trades){const t=normTrade(x);if(!t){skipped++;continue}const ac=find(x.account||x.acc)||(x.account?null:accs[0]);if(!ac){skipped++;continue}t.acc=ac.id;const k=key(t);if(seen.has(k)){skipped++;continue}seen.add(k);state.trades.push(t);added++}
+// yedekteki işlemler hesabı ID ile tutar (acc); hesap adına çevirip bu defterdeki hesapla eşleştir
+const idName=new Map((raw.accounts||[]).map(a=>[String(a.id),a.name]));
+for(const x of raw.trades){const t=normTrade(x);if(!t){skipped++;continue}const ac=find(x.account||idName.get(String(x.acc))||x.acc)||(x.account?null:accs[0]);if(!ac){skipped++;continue}t.acc=ac.id;const k=key(t);if(seen.has(k)){skipped++;continue}seen.add(k);state.trades.push(t);added++}
 state.accounts=accs;saveAccounts(accs);saveTrades(state.trades);return{added,skipped}}
 // FIX(2): hesap limitleri (dl/md/cur) yedekten geri yüklenir — eski yedeklerde yoksa 0/boş
 function importCsv(text){const rows=parseCsv(text);if(rows.length<2)return{added:0,skipped:0,why:"CSV boş görünüyor",nofx:0,trades:state.trades};
@@ -78,7 +81,7 @@ const date=toStamp(dRaw);
 if(!sym){skipped++;why=why||"sembol sütunu bulunamadı";continue}
 if(!dRaw){skipped++;why=why||"tarih sütunu yok veya boş";continue}
 if(!date){skipped++;why=why||"tarih okunamadı: "+dRaw;continue}
-let dir=String(gg(r,"dcs")||"").trim().toLocaleLowerCase("tr");if(!dir){const o=num(gg(r,"giris")),c=num(gg(r,"kapanis"));dir=o!=null&&c!=null?(c<o?"short":"long"):""}
+let dir=String(gg(r,"dcs")||"").trim().toLocaleLowerCase("tr");if(!dir){skipped++;why=why||"yön sütunu yok (Type/Direction/Side)";continue}
 dir=["short","sell"].includes(dir)?"SHORT":"LONG";
 const entry=num(gg(r,"giris")),exitRaw=gg(r,"kapanis"),exit=num(exitRaw);
 if(exitRaw&&exit==null){skipped++;why=why||"kapanış fiyatı sayı değil";continue}

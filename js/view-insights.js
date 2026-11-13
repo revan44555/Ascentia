@@ -51,7 +51,7 @@ return `<div class="card"><p class="lbl">R dağılımı (işlem sayısı)</p>${r
 function wkKey(){const d=new Date(),t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));const y=t.getUTCFullYear();return y+"-W"+Math.ceil(((t-Date.UTC(y,0,1))/864e5+1)/7)}
 const lsg=k=>{try{return localStorage.getItem(k)||""}catch(e){return""}},lss=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 const CHK=["Setup planıma uyuyor","Stop ve hedef belli","Risk limitimin içinde","Sakinim, acelem yok"];
-const chkKey=()=>"tj_chk_"+new Date().toISOString().slice(0,10);
+const chkKey=()=>"tj_chk_"+todayStamp();
 function checklistCard(){const v=lsg(chkKey());return `<details class="dt"><summary>İşlem öncesi kontrol <span id="chkN" class="mono">${[...v].filter(c=>c==="1").length}/${CHK.length}</span></summary><div class="stack" style="margin:8px 0">${CHK.map((x,i)=>`<label class="chk"><input type="checkbox" data-chk="${i}"${v[i]==="1"?" checked":""}> ${x}</label>`).join("")}</div></details>`}
 function reviewCard(){return `<details class="dt"><summary><span>Haftalık değerlendirme <small class="subtle" style="margin-left:6px">${lsg("tj_review_"+wkKey())?"yazıldı ✓":"bu haftanın notu"}</small></span></summary><textarea class="inp" rows="4" id="wkNote" aria-label="Haftalık değerlendirme" placeholder="Bu hafta neyi iyi yaptım, neyi tekrarlamayacağım?" style="margin:8px 0">${esc(lsg("tj_review_"+wkKey()))}</textarea></details>`}
 const OPENS=new Set(),dKey=d=>{const m=d.querySelector("summary");return m?location.hash.split("?")[0]+"|"+m.textContent.replace(/\s*\d+\/\d+$/,"").trim():""};

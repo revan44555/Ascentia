@@ -2,6 +2,7 @@
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const num=v=>{if(v==null||v==="")return null;if(typeof v==="number")return Number.isFinite(v)?v:null;let s=String(v).trim().replace(/[\s ']/g,"");if(s==="")return null;const c=s.lastIndexOf(","),d=s.lastIndexOf(".");if(c>=0&&d>=0){s=c>d?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"")}else if(c>=0){s=s.indexOf(",")!==c?s.replace(/,/g,""):s.replace(",",".")}else if(d>=0&&s.indexOf(".")!==d)s=s.replace(/\./g,"");const n=Number(s);return Number.isFinite(n)?n:null};
+const dec=s=>{try{return decodeURIComponent(s)}catch(e){return s}};
 function money(n,d){d=d===undefined?2:d;if(n==null||Number.isNaN(n))return"—";const a=Math.abs(n).toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d});if(n>0)return"+"+a;if(n<0)return"−"+a;return a}
 function numF(n,d){if(n==null||Number.isNaN(n))return"—";return n.toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d})}
 function pct(n,d){if(n==null||Number.isNaN(n))return"—";return numF(n,d===undefined?1:d)+"%"}
