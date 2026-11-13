@@ -102,10 +102,14 @@ function weekStartStamp() {
     String(d.getDate()).padStart(2, "0")
   );
 }
-function nowLocal() {
-  const d = new Date();
+/** Date → <input type="datetime-local"> biçimi ("YYYY-MM-DDTHH:mm", yerel saat). */
+function toLocalInput(date) {
+  const d = new Date(date);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 16);
+}
+function nowLocal() {
+  return toLocalInput(new Date());
 }
 function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);

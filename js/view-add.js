@@ -3,11 +3,6 @@ let form = null,
   moreOpen = false,
   techForce = false,
   tagDraft = null;
-const detailsFilled = f =>
-  !!(
-    f &&
-    (f.setup || f.emo || f.mist || f.plan || f.rt || f.notes || f.exitDate || f.stop0 || f.fx)
-  );
 const techOpen = () => techForce || !!(form && (form.stop0 || form.fx));
 function emptyForm() {
   return {

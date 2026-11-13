@@ -2517,3 +2517,10 @@ nav.bottom {
   content-visibility: auto;
   contain-intrinsic-size: auto 76px;
 }
+
+/* Chip içindeki düğme (etiket silme ✕): .chip::after dokunma alanı katmanı düğmeyi örtüyordu,
+   tıklama düğmeye ulaşmıyordu. Düğmeyi katmanın üstüne alır. */
+.chip > button {
+  position: relative;
+  z-index: 1;
+}

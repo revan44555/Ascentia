@@ -95,7 +95,7 @@ function render() {
 function saveForm() {
   if (!form) return;
   ["entry", "stop", "tp", "stop0", "exit"].forEach(k => {
-    if (form[k] != "") form[k] = fixThou(form.symbol, form[k]);
+    if (form[k] !== "") form[k] = fixThou(form.symbol, form[k]);
   });
   const sym = String(form.symbol || "")
     .trim()
@@ -267,353 +267,384 @@ function markBackup() {
   saveBackupStamp(String(Date.now()));
 }
 
-document.getElementById("view").addEventListener("click", e => {
-  const actEl = e.target.closest(
-    "[data-act],[data-sym],[data-facc],[data-rng],[data-lchip],[data-chip],[data-qd],[data-qx],[data-itab],[data-tip]"
-  );
-  if (!actEl) return;
-  if (actEl.dataset.tip !== undefined && actEl.hasAttribute("data-tip") && !actEl.dataset.act) {
-    toast(actEl.getAttribute("data-tip"));
-    return;
-  }
-  if (actEl.dataset.qd !== undefined) {
-    const m = +actEl.dataset.qd,
-      d = new Date(Date.now() - m * 6e4);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    form.date = d.toISOString().slice(0, 16);
-    const di = document.querySelector('[data-f="date"]');
-    if (di) di.value = form.date;
-    return;
-  }
-  if (actEl.dataset.qx !== undefined && form.date) {
-    const m = +actEl.dataset.qx,
-      b = new Date(new Date(form.date).getTime() + m * 6e4),
-      n = new Date();
-    b.setMinutes(b.getMinutes() - b.getTimezoneOffset());
-    n.setMinutes(n.getMinutes() - n.getTimezoneOffset());
-    form.exitDate = (b > n ? n : b).toISOString().slice(0, 16);
-    const di = document.querySelector('[data-f="exitDate"]');
-    if (di) di.value = form.exitDate;
-    return;
-  }
-  if (actEl.dataset.itab !== undefined) {
-    INS_TAB = actEl.dataset.itab;
+/* ------------------------------------------------------------------------- *
+ *  Tıklama yönlendirme
+ *
+ *  Ekrandaki tıklanabilir her öğe data-* özniteliğiyle işaretlenir ve tek bir
+ *  dinleyici (olay temsili) onu ilgili işleyiciye yönlendirir:
+ *    - data-act="<eylem>"  → ACTIONS["ad"]
+ *    - diğer özniteliklerle (data-chip, data-rng …) → CLICK_ATTRS
+ *  Yeni bir etkileşim eklemek için bu iki tablodan birine giriş eklemek yeter;
+ *  tıklama seçicisi (CLICK_SELECTOR) tablolardan üretildiği için unutulamaz.
+ * ------------------------------------------------------------------------- */
+
+/** Hızlı giriş zamanı: "N dakika önce". */
+function onQuickEntryTime(el) {
+  form.date = toLocalInput(new Date(Date.now() - +el.dataset.qd * 6e4));
+  const input = document.querySelector('[data-f="date"]');
+  if (input) input.value = form.date;
+}
+
+/** Hızlı çıkış zamanı: girişten N dakika sonra (gelecekteyse şimdiye çekilir). */
+function onQuickExitTime(el) {
+  const exitAt = toLocalInput(new Date(new Date(form.date).getTime() + +el.dataset.qx * 6e4));
+  const now = toLocalInput(new Date());
+  form.exitDate = exitAt > now ? now : exitAt;
+  const input = document.querySelector('[data-f="exitDate"]');
+  if (input) input.value = form.exitDate;
+}
+
+/** İşlemler listesindeki filtre düğmesi (data-lchip="alan:değer"): aynı düğmeye tekrar basınca kalkar. */
+function onListChip(el) {
+  const [key, value] = el.dataset.lchip.split(":");
+  listState[key] = listState[key] === value ? "" : value;
+  const list = $("#tradeList");
+  if (list) list.innerHTML = tradesListHtml();
+  document.querySelectorAll("[data-lchip]").forEach(chip => {
+    const [k, v] = chip.dataset.lchip.split(":");
+    chip.classList.toggle("on", listState[k] === v);
+    chip.setAttribute("aria-pressed", listState[k] === v);
+  });
+}
+
+/** İşlem formundaki seçim düğmesi (yön, hesap, setup, duygu, plan, puan …). */
+function onFormChip(el) {
+  const key = el.dataset.chip,
+    value = el.dataset.v;
+  if (key === "acc" || key === "dir") {
+    form[key] = value;
     render();
     return;
   }
-  if (actEl.dataset.facc !== undefined) {
-    state.filterAccountId = actEl.dataset.facc;
+  // allowOff: aynı düğmeye tekrar basınca seçim kalkar (data-off="0" ise kalkmaz)
+  form[key] = form[key] === value && el.dataset.off !== "0" ? "" : value;
+  if (key === "rt") {
     render();
     return;
   }
-  if (actEl.dataset.rng !== undefined) {
-    RANGE = actEl.dataset.rng;
-    render();
-    return;
-  }
-  if (actEl.dataset.lchip !== undefined) {
-    const [k, v] = actEl.dataset.lchip.split(":");
-    listState[k] = listState[k] === v ? "" : v;
-    const tl = $("#tradeList");
-    if (tl) tl.innerHTML = tradesListHtml();
-    document.querySelectorAll("[data-lchip]").forEach(c => {
-      const [a, b] = c.dataset.lchip.split(":");
-      c.classList.toggle("on", listState[a] === b);
-      c.setAttribute("aria-pressed", listState[a] === b);
-    });
-    return;
-  }
-  if (actEl.dataset.qcemo !== undefined) {
-    qcEmo = qcEmo === actEl.dataset.qcemo ? "" : actEl.dataset.qcemo;
-    render();
-    return;
-  }
-  if (actEl.dataset.chip !== undefined && form) {
-    const k = actEl.dataset.chip,
-      v = actEl.dataset.v;
-    if (k === "acc" || k === "dir") {
-      form[k] = v;
+  const on = form[key] === value;
+  el.classList.toggle("on", on);
+  el.classList.toggle("off", !on);
+  el.setAttribute("aria-pressed", on);
+}
+
+/**
+ * data-* özniteliğine göre yönlendirme. Sıra önemli: ilk eşleşen çalışır.
+ * `when` koşulu sağlanmazsa sıradaki girişe geçilir.
+ */
+const CLICK_ATTRS = [
+  { attr: "tip", when: el => !el.dataset.act, run: el => toast(el.getAttribute("data-tip")) },
+  { attr: "qd", run: onQuickEntryTime },
+  { attr: "qx", when: () => form && form.date, run: onQuickExitTime },
+  {
+    attr: "itab",
+    run: el => {
+      INS_TAB = el.dataset.itab;
+      render();
+    },
+  },
+  {
+    attr: "facc",
+    run: el => {
+      state.filterAccountId = el.dataset.facc;
+      render();
+    },
+  },
+  {
+    attr: "rng",
+    run: el => {
+      RANGE = el.dataset.rng;
+      render();
+    },
+  },
+  { attr: "lchip", run: onListChip },
+  {
+    attr: "qcemo",
+    run: el => {
+      qcEmo = qcEmo === el.dataset.qcemo ? "" : el.dataset.qcemo;
+      render();
+    },
+  },
+  { attr: "chip", when: () => form, run: onFormChip },
+  {
+    attr: "sym",
+    run: el => {
+      applySym(el.dataset.sym);
+      render();
+    },
+  },
+];
+
+/** "Anı değerlendir" kartı: duygu + not kaydet. */
+function saveQuickEval(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade) return;
+  if (qcEmo) trade.emo = qcEmo;
+  const note = ((document.getElementById("qcNote") || {}).value || "").trim();
+  if (note) trade.notes = trade.notes ? trade.notes + "\n" + note : note;
+  trade.qc = 1;
+  qcEmo = "";
+  qcNote = "";
+  saveTrades(state.trades);
+  toast("Değerlendirme kaydedildi");
+  render();
+}
+
+/** Yedeği paylaş (destekleniyorsa) ya da dosya olarak indir. */
+function exportJson() {
+  const json = backupJson();
+  markBackup();
+  if (navigator.share) {
+    const file = new File([json], "ascentia-defter.json", { type: "application/json" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "Ascentia yedek" }).catch(() => {});
       render();
       return;
     }
-    if (form[k] === v && actEl.dataset.off !== "0") {
-      form[k] = "";
-    } else form[k] = v;
-    if (k === "rt") render();
-    else {
-      const on = form[k] === v;
-      actEl.classList.toggle("on", on);
-      actEl.classList.toggle("off", !on);
-      actEl.setAttribute("aria-pressed", on);
+  }
+  downloadText("ascentia-defter.json", json, "application/json");
+  toast("Yedek indirildi");
+  render();
+}
+
+function addAccount() {
+  const input = document.querySelector("[data-newacc]");
+  const name = ((input && input.value) || "").trim().slice(0, 24);
+  if (!name) {
+    toast("Hesap adı gir");
+    return;
+  }
+  state.accounts.push({
+    id: "a" + Date.now().toString(36),
+    name,
+    balance: 0,
+    dl: 0,
+    md: 0,
+    cur: "",
+  });
+  saveAccounts(state.accounts);
+  render();
+}
+
+function deleteAccount(el) {
+  const id = el.dataset.id;
+  if (state.accounts.length <= 1) {
+    toast("Son hesap silinemez", "err");
+    return;
+  }
+  if (state.trades.some(t => accountId(t) === id)) {
+    toast("Bu hesapta işlem var", "err");
+    return;
+  }
+  if (!typedConfirm("Hesap silinsin mi?")) return;
+  state.accounts = state.accounts.filter(a => a.id !== id);
+  if (state.filterAccountId === id) state.filterAccountId = "all";
+  saveAccounts(state.accounts);
+  render();
+}
+
+/** Formdaki sembolü "özel sembol" olarak listeye ekler. */
+function addCustomSymbol() {
+  const raw = (form.symbol || "").trim().toUpperCase();
+  if (raw.length < 2) {
+    toast("En az 2 karakter");
+    return;
+  }
+  if (!state.tags.syms.includes(raw)) {
+    state.tags.syms.push(raw);
+    saveTags(state.tags);
+  }
+  applySym(raw);
+  render();
+}
+
+/** İşlemi siler; 6 sn boyunca "Geri al" sunar. */
+function deleteTrade(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade) return;
+  if (!typedConfirm("İşlem silinsin mi? (" + trade.symbol + " " + formatWhen(trade.date) + ")")) {
+    return;
+  }
+  const index = state.trades.indexOf(trade);
+  state.trades.splice(index, 1);
+  saveTrades(state.trades);
+  location.hash = "#/trades";
+  toast("Silindi", null, 6000, {
+    label: "Geri al",
+    fn: () => {
+      state.trades.splice(index, 0, trade);
+      saveTrades(state.trades);
+      render();
+    },
+  });
+}
+
+/** İşlemi yeni kayıt şablonu olarak kopyalar (id olmadan, şimdiki zamanla). */
+function cloneTrade(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade) return;
+  const copy = fromTrade(trade);
+  delete copy.id;
+  form = { ...copy, date: nowLocal(), __for: "/add" };
+  location.hash = "#/add";
+  render();
+}
+
+/** Tüm verileri siler (localStorage + IndexedDB). Tema ve bağlı dosya adı korunur. */
+function resetAllData() {
+  if (!typedConfirm("TÜM veriler silinsin mi?")) return;
+  const theme = state.theme,
+    fileName = state.fileName;
+  try {
+    localStorage.clear();
+  } catch (e) {}
+  wipeStores();
+  saveTheme(theme);
+  Object.assign(state, {
+    trades: [],
+    accounts: [{ id: "a1", name: "Ana hesap", balance: 0, dl: 0, md: 0, cur: "" }],
+    tags: JSON.parse(JSON.stringify(DEFAULT_TAGS)),
+    filterAccountId: "all",
+    lastBackupAt: null,
+    memoryOnly: false,
+    file: "none",
+    fileName,
+    theme,
+  });
+  saveBackupStamp("");
+  location.hash = "#/";
+  render();
+}
+
+/** Açık pozisyonu kapatır: miktar boşsa tamamını, daha küçükse kısmen (applyPartial). */
+function closeTrade(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade || trade.exit != null) return;
+  const price = num($("#cx").value),
+    qty = $("#cq") ? num($("#cq").value) : null,
+    errEl = $("#fe-cq");
+  if (price == null || price <= 0) {
+    if (errEl) errEl.textContent = "Geçerli bir çıkış fiyatı gir.";
+    return;
+  }
+  if (qty != null) {
+    const error = applyPartial(trade.id, qty, price);
+    if (error) {
+      if (errEl) errEl.textContent = error;
+      return;
     }
-    return;
-  }
-  if (actEl.dataset.sym !== undefined) {
-    applySym(actEl.dataset.sym);
+    toast(
+      "Kısmi kapatıldı: " + numF(qty, 2) + " @ " + numF(price, 4) + " · kalan " + numF(trade.qty, 2)
+    );
     render();
     return;
   }
-  const act = actEl.dataset.act;
-  if (!act) return;
-  if (act === "save") {
-    saveForm();
-    return;
-  }
-  if (act === "qcsave") {
-    const t0 = state.trades.find(x => x.id === actEl.dataset.id);
-    if (!t0) return;
-    if (qcEmo) t0.emo = qcEmo;
-    const n = ((document.getElementById("qcNote") || {}).value || "").trim();
-    if (n) t0.notes = t0.notes ? t0.notes + "\n" + n : n;
-    t0.qc = 1;
-    qcEmo = "";
-    qcNote = "";
-    saveTrades(state.trades);
-    toast("Değerlendirme kaydedildi");
-    render();
-    return;
-  }
-  if (act === "imgdel") {
+  trade.exit = price;
+  trade.exitDate = nowLocal() < trade.date ? trade.date : nowLocal();
+  saveTrades(state.trades);
+  render();
+}
+
+/** data-act="<eylem>" → işleyici. */
+const ACTIONS = {
+  save: () => saveForm(),
+  qcsave: saveQuickEval,
+  imgdel: () => {
     if (form) form.img = "";
     render();
-    return;
-  }
-  if (act === "install") {
+  },
+  install: () => {
     if (!INSTALL_PROMPT) return;
     INSTALL_PROMPT.prompt();
     INSTALL_PROMPT = null;
     render();
-    return;
-  }
-  if (act === "togglemore") {
+  },
+  togglemore: () => {
     moreOpen = !moreOpen;
     render();
-    return;
-  }
-  if (act === "hidepl") {
+  },
+  hidepl: () => {
     try {
       localStorage.setItem("tj_hidepl", localStorage.getItem("tj_hidepl") === "1" ? "0" : "1");
     } catch (e) {}
     render();
-    return;
-  }
-  if (act === "theme") {
-    state.theme = actEl.dataset.v;
+  },
+  theme: el => {
+    state.theme = el.dataset.v;
     saveTheme(state.theme);
     document.documentElement.classList.add("tx");
     applyTheme();
     setTimeout(() => document.documentElement.classList.remove("tx"), 400);
     render();
-    return;
-  }
-  if (act === "jsonexport") {
-    const j = backupJson();
-    markBackup();
-    if (navigator.share) {
-      const f = new File([j], "ascentia-defter.json", { type: "application/json" });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) {
-        navigator.share({ files: [f], title: "Ascentia yedek" }).catch(() => {});
-        render();
-        return;
-      }
-    }
-    downloadText("ascentia-defter.json", j, "application/json");
-    toast("Yedek indirildi");
-    render();
-    return;
-  }
-  // FIX(11): csvexport yalnızca Veri sayfasındadır; ölü inRange koşulu kaldırıldı
-  if (act === "csvexport") {
+  },
+  jsonexport: exportJson,
+  csvexport: () => {
     const csv = tradesToCsv(filterAccount(state.trades, state.filterAccountId));
     downloadText("ascentia-islemler.csv", csv, "text/csv");
     toast("CSV indirildi");
-    return;
-  }
-  if (act === "jsonmerge") {
-    const inp = document.querySelector('[data-file="json"]');
-    if (inp) {
-      inp.dataset.merge = "1";
-      inp.click();
-    }
-    return;
-  }
-  if (act === "linkfile") {
-    linkFile();
-    return;
-  }
-  if (act === "unlinkfile") {
+  },
+  jsonmerge: () => {
+    const input = document.querySelector('[data-file="json"]');
+    if (!input) return;
+    input.dataset.merge = "1";
+    input.click();
+  },
+  linkfile: () => linkFile(),
+  unlinkfile: () => {
     unlinkFile();
     toast("Otomatik kayıt kapatıldı");
-    return;
-  }
-  if (act === "fileresume") {
-    resumeFile();
-    return;
-  }
-  if (act === "calprev") {
+  },
+  fileresume: () => resumeFile(),
+  calprev: () => {
     calOff--;
     render();
-    return;
-  }
-  if (act === "calnext") {
+  },
+  calnext: () => {
     calOff++;
     render();
-    return;
-  }
-  if (act === "more") {
+  },
+  more: () => {
     listState.limit += 30;
-    const tl = $("#tradeList");
-    if (tl) tl.innerHTML = tradesListHtml();
-    return;
-  }
-  if (act === "addacc") {
-    const i = document.querySelector("[data-newacc]");
-    const n = ((i && i.value) || "").trim().slice(0, 24);
-    if (!n) {
-      toast("Hesap adı gir");
-      return;
-    }
-    state.accounts.push({
-      id: "a" + Date.now().toString(36),
-      name: n,
-      balance: 0,
-      dl: 0,
-      md: 0,
-      cur: "",
-    });
-    saveAccounts(state.accounts);
-    render();
-    return;
-  }
-  if (act === "delacc") {
-    const id = actEl.dataset.id;
-    if (state.accounts.length <= 1) {
-      toast("Son hesap silinemez", "err");
-      return;
-    }
-    if (state.trades.some(t => accountId(t) === id)) {
-      toast("Bu hesapta işlem var", "err");
-      return;
-    }
-    if (!typedConfirm("Hesap silinsin mi?")) return;
-    state.accounts = state.accounts.filter(a => a.id !== id);
-    if (state.filterAccountId === id) state.filterAccountId = "all";
-    saveAccounts(state.accounts);
-    render();
-    return;
-  }
-  if (act === "addtag") {
-    const i = document.querySelector('[data-newtag="' + actEl.dataset.kind + '"]');
-    addTag(actEl.dataset.kind, i ? i.value : "");
-    return;
-  }
-  if (act === "deltag") {
-    const { k, v } = actEl.dataset;
-    state.tags[k] = state.tags[k].filter(x => x !== v);
+    const list = $("#tradeList");
+    if (list) list.innerHTML = tradesListHtml();
+  },
+  addacc: addAccount,
+  delacc: deleteAccount,
+  addtag: el => {
+    const input = document.querySelector('[data-newtag="' + el.dataset.kind + '"]');
+    addTag(el.dataset.kind, input ? input.value : "");
+  },
+  deltag: el => {
+    const { kind, v } = el.dataset; // şablon: data-kind="setups|emos|mists|syms" data-v="etiket"
+    state.tags[kind] = state.tags[kind].filter(x => x !== v);
     saveTags(state.tags);
     render();
-    return;
-  }
-  if (act === "tagdraft") {
-    tagDraft = { kind: actEl.dataset.kind, value: "" };
+  },
+  tagdraft: el => {
+    tagDraft = { kind: el.dataset.kind, value: "" };
     render();
+  },
+  addsym: addCustomSymbol,
+  deltrade: deleteTrade,
+  clone: cloneTrade,
+  clear: resetAllData,
+  closetrade: closeTrade,
+};
+
+/** Tıklama seçicisi tablolardan üretilir: tabloda olan her öznitelik yakalanır. */
+const CLICK_SELECTOR = ["[data-act]", ...CLICK_ATTRS.map(c => `[data-${c.attr}]`)].join(",");
+
+document.getElementById("view").addEventListener("click", e => {
+  const el = e.target.closest(CLICK_SELECTOR);
+  if (!el) return;
+  for (const { attr, when, run } of CLICK_ATTRS) {
+    if (el.dataset[attr] === undefined) continue;
+    if (when && !when(el)) continue;
+    run(el);
     return;
   }
-  if (act === "addsym") {
-    const raw = (form.symbol || "").trim().toUpperCase();
-    if (raw.length < 2) {
-      toast("En az 2 karakter");
-      return;
-    }
-    if (!state.tags.syms.includes(raw)) {
-      state.tags.syms.push(raw);
-      saveTags(state.tags);
-    }
-    applySym(raw);
-    render();
-    return;
-  }
-  if (act === "deltrade") {
-    const id = actEl.dataset.id,
-      t = state.trades.find(x => x.id === id);
-    if (!t) return;
-    if (!typedConfirm("İşlem silinsin mi? (" + t.symbol + " " + formatWhen(t.date) + ")")) return;
-    const idx = state.trades.indexOf(t);
-    state.trades.splice(idx, 1);
-    saveTrades(state.trades);
-    location.hash = "#/trades";
-    toast("Silindi", null, 6000, {
-      label: "Geri al",
-      fn: () => {
-        state.trades.splice(idx, 0, t);
-        saveTrades(state.trades);
-        render();
-      },
-    });
-    return;
-  }
-  if (act === "clone") {
-    const t = state.trades.find(x => x.id === actEl.dataset.id);
-    if (!t) return;
-    const c = fromTrade(t);
-    delete c.id;
-    form = { ...c, date: nowLocal(), __for: "/add" };
-    location.hash = "#/add";
-    render();
-    return;
-  }
-  if (act === "clear") {
-    if (!typedConfirm("TÜM veriler silinsin mi?")) return;
-    const d = state.theme,
-      f = state.fileName;
-    try {
-      localStorage.clear();
-    } catch (e) {}
-    wipeStores();
-    saveTheme(d);
-    Object.assign(state, {
-      trades: [],
-      accounts: [{ id: "a1", name: "Ana hesap", balance: 0, dl: 0, md: 0, cur: "" }],
-      tags: JSON.parse(JSON.stringify(DEFAULT_TAGS)),
-      filterAccountId: "all",
-      lastBackupAt: null,
-      memoryOnly: false,
-      file: "none",
-      fileName: f,
-      theme: d,
-    });
-    saveBackupStamp("");
-    location.hash = "#/";
-    render();
-    return;
-  }
-  if (act === "closetrade") {
-    const t = state.trades.find(x => x.id === actEl.dataset.id);
-    if (!t || t.exit != null) return;
-    const p = num($("#cx").value),
-      q = $("#cq") ? num($("#cq").value) : null,
-      e = $("#fe-cq");
-    if (p == null || p <= 0) {
-      if (e) e.textContent = "Geçerli bir çıkış fiyatı gir.";
-      return;
-    }
-    // FIX(3): kısmi kapanış tek çekirdekten (applyPartial) — prompt tabanlı kopya kaldırıldı
-    if (q != null) {
-      const pe = applyPartial(t.id, q, p);
-      if (pe) {
-        if (e) e.textContent = pe;
-        return;
-      }
-      toast("Kısmi kapatıldı: " + numF(q, 2) + " @ " + numF(p, 4) + " · kalan " + numF(t.qty, 2));
-      render();
-      return;
-    }
-    t.exit = p;
-    t.exitDate = nowLocal() < t.date ? t.date : nowLocal();
-    saveTrades(state.trades);
-    render();
-    return;
-  }
+  const action = ACTIONS[el.dataset.act];
+  if (action) action(el);
 });
 
 document.getElementById("view").addEventListener("input", e => {

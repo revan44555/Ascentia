@@ -28,7 +28,7 @@ function newStore() {
 
 function load(store) {
   store = store || newStore();
-  const env = { store, prompts: [], toasts: [] };
+  const env = { store, prompts: [], toasts: [], handlers: {} };
   const stub = new Proxy(
     {},
     {
@@ -52,6 +52,10 @@ function load(store) {
       set: () => true,
     }
   );
+  // #view üzerindeki dinleyiciler yakalanır: testler gerçek tıklama yönlendirmesini çalıştırabilir
+  const viewStub = new Proxy(stub, {
+    get: (t, p) => (p === "addEventListener" ? (type, fn) => (env.handlers[type] = fn) : t[p]),
+  });
   const ctx = {
     console,
     setTimeout,
@@ -110,7 +114,7 @@ function load(store) {
     },
     document: {
       addEventListener() {},
-      getElementById: () => stub,
+      getElementById: id => (id === "view" ? viewStub : stub),
       querySelector: () => stub,
       querySelectorAll: () => [],
       documentElement: stub,
@@ -146,6 +150,9 @@ function load(store) {
     vm.runInContext(src, ctx, { filename: f + ".js" });
   }
   const names = [
+    "ACTIONS",
+    "CLICK_ATTRS",
+    "CLICK_SELECTOR",
     "num",
     "pnl",
     "risk",
@@ -1158,6 +1165,73 @@ test("F31", "Sekme senkronu: IndexedDB eskiyse localStorage'taki yeni veri okunu
   const R = await b.T.readStores();
   expect(R.trades.length === 2, "okunan işlem " + R.trades.length + " (2 olmalı)");
 });
+
+// ===== Yama 23: tablo tabanlı tıklama yönlendirmesi ===========================
+const click = (env, dataset) => env.handlers.click({ target: { closest: () => ({ dataset }) } });
+test(
+  "F32",
+  "Şablonlarda kullanılan her data-act ve tıklama özniteliği bir işleyiciye bağlı",
+  () => {
+    const { T } = load();
+    const src = ["app", "view-home", "view-add", "view-insights", "view-more", "ui"]
+      .map(f => fs.readFileSync(path.join(DIR, "js", f + ".js"), "utf8"))
+      .join("\n");
+    const acts = [...new Set([...src.matchAll(/data-act="(\w+)"/g)].map(m => m[1]))];
+    const missing = acts.filter(a => typeof T.ACTIONS[a] !== "function");
+    expect(!missing.length, "işleyicisi olmayan data-act: " + missing.join(", "));
+    const attrs = ["tip", "qd", "qx", "itab", "facc", "rng", "lchip", "qcemo", "chip", "sym"];
+    const used = attrs.filter(a => new RegExp("data-" + a + "=").test(src));
+    const unbound = used.filter(a => !T.CLICK_SELECTOR.includes("[data-" + a + "]"));
+    expect(!unbound.length, "tıklama seçicisinde olmayan öznitelik: " + unbound.join(", "));
+  }
+);
+test(
+  "F32",
+  "Duygu düğmesi (data-qcemo) tıklaması seçimi değiştirir (eskiden hiç çalışmıyordu)",
+  () => {
+    const { ctx, env } = load();
+    click(env, { qcemo: "FOMO" });
+    expect(vm.runInContext("qcEmo", ctx) === "FOMO", "qcEmo=" + vm.runInContext("qcEmo", ctx));
+    click(env, { qcemo: "FOMO" });
+    expect(vm.runInContext("qcEmo", ctx) === "", "aynı düğmeye tekrar basınca kalkmalı");
+  }
+);
+test("F32", "Yönlendirme: data-act, aralık filtresi ve formsuz chip güvenle çalışır", () => {
+  const { T, ctx, env } = load();
+  withAcc(T);
+  click(env, { act: "togglemore" });
+  expect(vm.runInContext("moreOpen", ctx) === true, "togglemore");
+  click(env, { rng: "30" });
+  expect(vm.runInContext("RANGE", ctx) === "30", "rng");
+  vm.runInContext("form=null", ctx);
+  click(env, { chip: "dir", v: "SHORT" }); // form yok → sessizce yok sayılır
+  click(env, { act: "olmayanEylem" }); // bilinmeyen eylem → hata yok
+});
+test("F32", "Hızlı çıkış zamanı: gelecekteki çıkış şimdiye çekilir", () => {
+  const { T, ctx, env } = load();
+  withAcc(T);
+  vm.runInContext("form=emptyForm();form.__for='/add'", ctx);
+  vm.runInContext("form.date=nowLocal()", ctx);
+  click(env, { qx: "600" }); // girişten 10 saat sonrası = gelecek
+  const f = vm.runInContext("form", ctx);
+  expect(f.exitDate <= vm.runInContext("nowLocal()", ctx), "gelecekte kaldı: " + f.exitDate);
+});
+test(
+  "F33",
+  "Etiket silme (data-act=deltag, data-kind/data-v) etiketi kaldırır; ✕ düğmesi chip katmanının üstünde",
+  () => {
+    const { T, env } = load();
+    withAcc(T);
+    expect(T.state.tags.setups.includes("Breakout"), "ön koşul");
+    click(env, { act: "deltag", kind: "setups", v: "Breakout" });
+    expect(!T.state.tags.setups.includes("Breakout"), "etiket silinmedi");
+    const css = fs.readFileSync(path.join(DIR, "css", "style.css"), "utf8");
+    expect(
+      /\.chip\s*>\s*button\s*\{[^}]*z-index:\s*1/.test(css),
+      ".chip > button z-index kuralı yok"
+    );
+  }
+);
 
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {

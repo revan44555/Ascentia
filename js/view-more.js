@@ -107,8 +107,7 @@ ${TAGKIND.map(
 </div>`;
 }
 function viewMoreData() {
-  const bs = backupStatus(),
-    hasFS = typeof window.showSaveFilePicker === "function",
+  const hasFS = typeof window.showSaveFilePicker === "function",
     stor =
       state.file === "ok"
         ? "<b>otomatik dosya kaydı açık</b> (" + esc(state.fileName) + ")"
