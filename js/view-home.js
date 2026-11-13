@@ -37,8 +37,8 @@ function viewHome() {
   const trades = filterAccount(state.trades, state.filterAccountId);
   const today = todayStamp(),
     week = weekStartStamp();
-  const todayTrades = trades.filter(t => ek(t).startsWith(today));
-  const weekTrades = trades.filter(t => ek(t) >= week);
+  const todayTrades = trades.filter(t => closedAt(t).startsWith(today));
+  const weekTrades = trades.filter(t => closedAt(t) >= week);
   const todayNet = todayTrades.reduce((s, t) => s + (pnl(t) ?? 0), 0);
   const weekSum = summarize(weekTrades);
   const leak = topLeak(trades),
@@ -118,12 +118,12 @@ function viewTrades() {
 <div id="tradeList">${tradesListHtml()}</div>
 </div>`;
 }
-// FIX(19): son 72 saatte kapanan, değerlendirilmemiş işlem için hızlı duygu+not kartı
+// son 72 saatte kapanan, değerlendirilmemiş işlem için hızlı duygu+not kartı
 function quickEvalCard() {
   const cut = new Date(Date.now() - 72 * 36e5);
   const t = filterAccount(state.trades, state.filterAccountId)
-    .filter(x => x.exit != null && !x.qc && new Date(ek(x)) > cut)
-    .sort((a, b) => ek(b).localeCompare(ek(a)))[0];
+    .filter(x => x.exit != null && !x.qc && new Date(closedAt(x)) > cut)
+    .sort((a, b) => closedAt(b).localeCompare(closedAt(a)))[0];
   if (!t) return "";
   return `<div class="card s3"><p class="sect-h">Anı değerlendir</p>
 <p class="subtle" style="font-size:14px">${esc(t.symbol)} işlemi kapanalı birkaç saat oldu — o sırada ne hissettin?</p>

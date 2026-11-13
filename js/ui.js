@@ -4,7 +4,7 @@ let LASTLOT = {};
 try {
   LASTLOT = JSON.parse(localStorage.getItem("tj_lastlot_v1") || "{}");
 } catch (e) {}
-const stp = d =>
+const dateStamp = d =>
   d.getFullYear() +
   "-" +
   String(d.getMonth() + 1).padStart(2, "0") +
@@ -16,13 +16,13 @@ function inRange(t) {
   let f;
   if (RANGE === "7") {
     d.setDate(d.getDate() - 6);
-    f = stp(d);
+    f = dateStamp(d);
   } else if (RANGE === "30") {
     d.setDate(d.getDate() - 29);
-    f = stp(d);
+    f = dateStamp(d);
   } else if (RANGE === "month") f = todayStamp().slice(0, 8) + "01";
   else f = todayStamp().slice(0, 5) + "01-01";
-  return ek(t) >= f;
+  return closedAt(t) >= f;
 }
 function rangeChips() {
   return `<div class="chips scroll">${[
@@ -78,15 +78,18 @@ function kpi(label, value, tone, cls, tip) {
 function badge(txt, tone) {
   return `<span class="badge ${tone || "muted"}">${esc(txt)}</span>`;
 }
-const dcs = v => (String(v).split(".")[1] || "").length;
-const pxd = t =>
+const decimalPlaces = v => (String(v).split(".")[1] || "").length;
+const priceDecimals = t =>
   Math.min(
     6,
-    Math.max.apply(null, [t.entry, t.exit, t.stop, t.tp, t.stop0].filter(v => v != null).map(dcs))
+    Math.max.apply(
+      null,
+      [t.entry, t.exit, t.stop, t.tp, t.stop0].filter(v => v != null).map(decimalPlaces)
+    )
   );
-const pxs = (v, d) => {
+const formatPrice = (v, d) => {
   if (v == null) return "—";
-  const k = d == null ? Math.min(6, dcs(v)) : d;
+  const k = d == null ? Math.min(6, decimalPlaces(v)) : d;
   return v.toLocaleString("tr-TR", {
     minimumFractionDigits: k,
     maximumFractionDigits: k,
@@ -99,7 +102,7 @@ function tradeCard(t) {
   const bits = [
     t.setup,
     t.emo,
-    r != null ? rf(r) : "",
+    r != null ? formatR(r) : "",
     t.plan === "hayır" ? "plan dışı" : "",
     t.mist,
   ].filter(Boolean);
@@ -107,7 +110,7 @@ function tradeCard(t) {
 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
 <div style="min-width:0">
 <div style="display:flex;align-items:center;gap:8px"><p class="truncate" style="font-weight:500;letter-spacing:-.02em">${esc(t.symbol)}</p>${badge(t.dir === "LONG" ? "Long" : "Short", t.dir === "LONG" ? "up" : "dn")}</div>
-<p class="mono tc-px" style="margin-top:4px;font-size:13px"><span class="nw">${esc(pxs(t.entry, pxd(t)))}${t.exit != null ? " → " + esc(pxs(t.exit, pxd(t))) : ""}</span> <span class="muted nw">× ${esc(String(t.qty))}</span></p>
+<p class="mono tc-px" style="margin-top:4px;font-size:13px"><span class="nw">${esc(formatPrice(t.entry, priceDecimals(t)))}${t.exit != null ? " → " + esc(formatPrice(t.exit, priceDecimals(t))) : ""}</span> <span class="muted nw">× ${esc(String(t.qty))}</span></p>
 <p class="subtle" style="margin-top:2px;font-size:12px">${esc(formatWhen(t.date))}</p>
 </div>
 <p class="mono" style="font-size:15px;font-weight:500;${p == null ? "color:var(--fg);font-size:15px" : "color:var(--" + pnlClass(p) + ")"}">${p == null ? "Açık" : money(p)}</p>

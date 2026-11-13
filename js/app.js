@@ -44,7 +44,7 @@ function render() {
       if (params.id) {
         const tr0 = state.trades.find(t => t.id === params.id);
         form = tr0 ? fromTrade(tr0) : emptyForm();
-        // FIX(4): yarım kalmış düzenleme taslaktan geri yüklenir
+        // yarım kalmış düzenleme taslaktan geri yüklenir
         if (tr0 && d && d.__editId === params.id && d.__sig === tradeSig(tr0))
           Object.assign(form, d, { date: form.date });
       } else {
@@ -109,7 +109,7 @@ function saveForm() {
   form.qty = q0;
   const now = nowLocal();
   const ex0 = form.exit === "" || form.exit == null ? null : num(form.exit);
-  // FIX(12): çıkış yoksa "plana uydu" etiketi kaydedilmez
+  // çıkış yoksa "plana uydu" etiketi kaydedilmez
   const rec = {
     id: form.id || newId(),
     date: form.date || now,
@@ -665,7 +665,7 @@ document.getElementById("view").addEventListener("input", e => {
     t.dataset.newacc !== undefined ||
     t.dataset.aid !== undefined
   ) {
-    // FIX(8): hesap alanları her tuşta IndexedDB'ye yazmaz — 400 ms debounce
+    // hesap alanları her tuşta IndexedDB'ye yazmaz — 400 ms debounce
     if (t.dataset.aid !== undefined) {
       const [f, id] = t.dataset.aid.split(":");
       const a = state.accounts.find(x => x.id === id);
@@ -711,7 +711,7 @@ document.getElementById("view").addEventListener("input", e => {
   if (f === "exit") {
     const pw = $("#planwrap");
     if (pw) pw.hidden = !t.value.trim();
-    // FIX(12): çıkış silinirken plan etiketi de temizlenir
+    // çıkış silinirken plan etiketi de temizlenir
     if (!t.value.trim()) {
       form.plan = "";
       document.querySelectorAll('[data-chip="plan"]').forEach(c => {
@@ -823,7 +823,7 @@ document.getElementById("view").addEventListener("change", e => {
   }
 });
 
-// FIX(1): tek keydown handler — Enter sonraki alana geçer, son alanda kaydeder; datetime dahil tutarlı
+// tek keydown handler — Enter sonraki alana geçer, son alanda kaydeder; datetime dahil tutarlı
 document.getElementById("view").addEventListener("keydown", e => {
   if (e.key !== "Enter" || !e.target.dataset) return;
   if (e.target.dataset.f && e.target.tagName === "INPUT") {
@@ -890,7 +890,7 @@ let accTimer = null;
 
 window.addEventListener("hashchange", () => {
   if (!location.hash.startsWith("#/add")) {
-    // FIX(4): düzenleme formları da taslak olarak korunur (anahtar: __editId)
+    // düzenleme formları da taslak olarak korunur (anahtar: __editId)
     if (form && form.__for && form.__for.startsWith("/add") && formDirty()) {
       try {
         localStorage.setItem(
@@ -908,7 +908,7 @@ window.addEventListener("hashchange", () => {
   render();
 });
 
-// FIX(9): sekmeler arası senkron etiketleri de kapsar
+// sekmeler arası senkron etiketleri de kapsar
 window.addEventListener("storage", e => {
   if (e.key !== "tj_ts") return;
   (async () => {
@@ -922,7 +922,7 @@ window.addEventListener("storage", e => {
   await fileInit();
   render();
 })();
-// FIX(18): PWA — yüklenebilirlik + çevrimdışı (yalnızca gerçek tarayıcıda)
+// PWA — yüklenebilirlik + çevrimdışı (yalnızca gerçek tarayıcıda)
 let INSTALL_PROMPT = null;
 window.addEventListener("beforeinstallprompt", e => {
   e.preventDefault();

@@ -63,7 +63,7 @@ const PH = {
   exit: "açıksa boş",
   fees: "ör. 2.00",
 };
-function fld(k, l, type) {
+function textField(k, l, type) {
   return `<div><label class="fld"><span>${l}</span><input class="inp" data-f="${k}" placeholder="${PH[k] || ""}" type="${type || "text"}" ${type ? "" : 'inputmode="decimal" enterkeyhint="next" autocomplete="off"'} value="${esc(form ? form[k] : "")}"></label><p class="ferr" id="fe-${k}" role="alert"></p></div>`;
 }
 function errKey(m) {
@@ -130,8 +130,8 @@ function bigPx(sym) {
       /^(BTC|ETH)/.test(sym))
   );
 }
-// FIX(7): bilinmeyen sembolde de binlik ayracı tutarlı şekilde sıfırlanır
-// ("21.500" bilinen endeksse 21500, bilinmeyen sembolde de 21500 olur — 21.5 değil)
+// Fiyat alanındaki binlik noktasını temizler: bilinen büyük fiyatlı sembolde ("21.500" → 21500)
+// noktalar atılır; bilinmeyen sembolde "0." ile başlamayan değerlerde de atılır; sembol boşsa dokunulmaz.
 function fixThou(rawSym, v) {
   v = String(v == null ? "" : v).trim();
   if (!String(rawSym || "").trim()) return v;
@@ -214,11 +214,11 @@ ${
 <div id="symsug">${symHint(true)}</div>
 <div><p style="margin-bottom:6px;font-size:13px;font-weight:500;letter-spacing:.04em;color:var(--muted)">Yön</p><div class="dirbtn"><button type="button" aria-pressed="${form.dir === "LONG"}" class="long ${form.dir === "LONG" ? "on" : ""}" data-chip="dir" data-v="LONG" data-off="0">Long ↑</button><button type="button" aria-pressed="${form.dir === "SHORT"}" class="short ${form.dir === "SHORT" ? "on" : ""}" data-chip="dir" data-v="SHORT" data-off="0">Short ↓</button></div></div>
 <p class="sec">Seviyeler</p>
-<div class="grid2">${fld("entry", "Giriş")}${fld("stop", "Stop-loss")}</div>
-<div class="grid2">${fld("tp", "Hedef")}${fld("qty", "Lot / adet")}</div>
+<div class="grid2">${textField("entry", "Giriş")}${textField("stop", "Stop-loss")}</div>
+<div class="grid2">${textField("tp", "Hedef")}${textField("qty", "Lot / adet")}</div>
 <div id="liveh">${liveHint()}</div>
 <p class="sec">Sonuç · opsiyonel</p>
-<div class="grid2">${fld("exit", "Çıkış fiyatı")}${fld("fees", "Komisyon")}</div>
+<div class="grid2">${textField("exit", "Çıkış fiyatı")}${textField("fees", "Komisyon")}</div>
 </div>
 <div class="stack4 addside">
 <button type="button" class="btn lg secondary" data-act="togglemore" aria-expanded="${moreOpen}">${moreOpen ? "Ayrıntıları gizle" : "Ayrıntılar: etiket, not, çıkış zamanı"}</button>
@@ -249,8 +249,8 @@ ${form.img ? `<img src="${esc(form.img)}" alt="İşlem grafiği" style="width:10
 <div class="acc-f" style="margin-top:8px"><label class="btn sm secondary" style="cursor:pointer">Görsel seç<input type="file" accept="image/*" hidden data-file="img"></label>${form.img ? `<button type="button" class="btn sm ghost" data-act="imgdel">Kaldır</button>` : ""}</div></div>
 <label class="fld"><span>Not</span><textarea class="inp" rows="3" data-f="notes">${esc(form.notes)}</textarea></label>
 <details class="dt adv" ${techOpen() ? "open" : ""}><summary>Gelişmiş: ilk stop, kur, çarpan</summary><div class="stack4" style="margin:8px 0">
-${fld("stop0", "Stop'u oynattıysan: ilk stop (R için)")}
-${fld("fx", "P&L kuru (işlem → hesap para birimi, boşsa 1)")}
+${textField("stop0", "Stop'u oynattıysan: ilk stop (R için)")}
+${textField("fx", "P&L kuru (işlem → hesap para birimi, boşsa 1)")}
 <div><label class="fld"><span>Kontrat çarpanı (sembolden otomatik, boşsa 1)</span><input class="inp" data-f="mult" step="any" inputmode="decimal" placeholder="ör. forex 100000" value="${esc(form.mult)}"></label><p class="ferr" id="fe-mult" role="alert"></p></div>
 </div></details>
 </div>`

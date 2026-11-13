@@ -1,7 +1,7 @@
 "use strict";
-const mk = (a, m, k, h) => a.map(n => [n, m, k, h]);
+const symbolRows = (a, m, k, h) => a.map(n => [n, m, k, h]);
 const SYMS = [].concat(
-  mk(
+  symbolRows(
     [
       "EURUSD",
       "GBPUSD",
@@ -44,28 +44,28 @@ const SYMS = [].concat(
     "Forex",
     "1 lot = 100.000 birim"
   ),
-  mk(["XAUUSD"], 100, "Altın", "1 lot = 100 ons"),
-  mk(["XAGUSD"], 5000, "Gümüş", "1 lot = 5.000 ons"),
-  mk(
+  symbolRows(["XAUUSD"], 100, "Altın", "1 lot = 100 ons"),
+  symbolRows(["XAGUSD"], 5000, "Gümüş", "1 lot = 5.000 ons"),
+  symbolRows(
     ["NAS100", "US30", "SPX500", "GER40", "UK100", "JP225", "FRA40", "US2000"],
     1,
     "Endeks",
     "1 lot = nokta başına 1 birim"
   ),
-  mk(["USOIL", "UKOIL"], 1000, "Petrol", "1 lot = 1.000 varil"),
-  mk(
+  symbolRows(["USOIL", "UKOIL"], 1000, "Petrol", "1 lot = 1.000 varil"),
+  symbolRows(
     ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "BTCUSD", "ETHUSD"],
     1,
     "Kripto",
     "1 adet = 1 coin"
   ),
-  mk(["NQ"], 20, "Vadeli", "1 kontrat = 20$ / puan"),
-  mk(["MNQ"], 2, "Vadeli", "1 kontrat = 2$ / puan"),
-  mk(["ES"], 50, "Vadeli", "1 kontrat = 50$ / puan"),
-  mk(["MES"], 5, "Vadeli", "1 kontrat = 5$ / puan"),
-  mk(["YM"], 5, "Vadeli", "1 kontrat = 5$ / puan"),
-  mk(["GC"], 100, "Vadeli", "1 kontrat = 100 ons"),
-  mk(["CL"], 1000, "Vadeli", "1 kontrat = 1.000 varil")
+  symbolRows(["NQ"], 20, "Vadeli", "1 kontrat = 20$ / puan"),
+  symbolRows(["MNQ"], 2, "Vadeli", "1 kontrat = 2$ / puan"),
+  symbolRows(["ES"], 50, "Vadeli", "1 kontrat = 50$ / puan"),
+  symbolRows(["MES"], 5, "Vadeli", "1 kontrat = 5$ / puan"),
+  symbolRows(["YM"], 5, "Vadeli", "1 kontrat = 5$ / puan"),
+  symbolRows(["GC"], 100, "Vadeli", "1 kontrat = 100 ons"),
+  symbolRows(["CL"], 1000, "Vadeli", "1 kontrat = 1.000 varil")
 );
 const ALIAS = {
   GOLD: "XAUUSD",

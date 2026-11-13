@@ -1,5 +1,5 @@
 "use strict";
-// FIX(13): accounts boşken .id patlamasın — boşken "" dön
+// accounts boşken .id patlamasın — boşken "" dön
 function accountId(t) {
   return t.acc && state.accounts.length && state.accounts.some(a => a.id === t.acc)
     ? t.acc
@@ -7,11 +7,11 @@ function accountId(t) {
       ? state.accounts[0].id
       : "";
 }
-function ek(t) {
+function closedAt(t) {
   return t.exitDate || t.date;
 }
 function byExit(a) {
-  return a.slice().sort((x, y) => ek(x).localeCompare(ek(y)));
+  return a.slice().sort((x, y) => closedAt(x).localeCompare(closedAt(y)));
 }
 function holdMin(t) {
   if (!t.exitDate || !t.date) return null;
@@ -34,7 +34,7 @@ function holdBucket(t) {
   if (m < 1440) return "4 sa–1 gün";
   return "1 gün üstü";
 }
-// FIX(5): tarih normalize çoklu boşluğu da "T" yapar
+// tarih normalize çoklu boşluğu da "T" yapar
 function normTrade(x) {
   if (!x || typeof x !== "object") return null;
   const sym = String(x.symbol || "")
@@ -120,7 +120,8 @@ function balanceAt(t) {
     a.balance +
     state.trades
       .filter(
-        x => x.id !== t.id && accountId(x) === accountId(t) && ek(x) <= t.date && pnl(x) != null
+        x =>
+          x.id !== t.id && accountId(x) === accountId(t) && closedAt(x) <= t.date && pnl(x) != null
       )
       .reduce((s, x) => s + pnl(x), 0)
   );
@@ -169,13 +170,13 @@ function unitize(trades) {
       rs = u.map(risk),
       last = u
         .slice()
-        .sort((a, b) => ek(a).localeCompare(ek(b)))
+        .sort((a, b) => closedAt(a).localeCompare(closedAt(b)))
         .pop();
     return {
       ...rep,
       qty: u.reduce((s, t) => s + t.qty, 0),
       exit: done ? last.exit : null,
-      exitDate: done ? ek(last) : "",
+      exitDate: done ? closedAt(last) : "",
       __pnl: done ? Math.round(u.reduce((s, t) => s + pnl(t), 0) * 100) / 100 : null,
       __risk: rs.every(r => r != null) ? rs.reduce((a, b) => a + b, 0) : null,
     };
@@ -258,7 +259,7 @@ function equityPoints(trades) {
   const pts = [{ i: 0, date: "", equity: 0, pnl: 0 }];
   closed.forEach((t, i) => {
     eq += pnl(t);
-    pts.push({ i: i + 1, date: ek(t), equity: eq, pnl: pnl(t) });
+    pts.push({ i: i + 1, date: closedAt(t), equity: eq, pnl: pnl(t) });
   });
   return pts;
 }
@@ -310,10 +311,10 @@ function monthCells(trades, year, month0) {
   const prefix = year + "-" + String(month0 + 1).padStart(2, "0");
   const map = new Map();
   for (const t of trades) {
-    if (!ek(t).startsWith(prefix)) continue;
+    if (!closedAt(t).startsWith(prefix)) continue;
     const p = pnl(t);
     if (p == null) continue;
-    const day = ek(t).slice(0, 10);
+    const day = closedAt(t).slice(0, 10);
     const c = map.get(day) || { date: day, net: 0, n: 0 };
     c.net += p;
     c.n++;
@@ -337,7 +338,7 @@ function validate(o) {
   if (o.mult != null && o.mult <= 0) return "Kontrat çarpanı 0'dan büyük olmalı.";
   if (o.exitDate && o.date && o.exitDate < o.date) return "Çıkış zamanı girişten önce olamaz.";
   const L = o.dir === "LONG";
-  // FIX(6): stop ve hedef için pozitiflik kontrolü (negatif stop sahte risk üretirdi)
+  // stop ve hedef için pozitiflik kontrolü (negatif stop sahte risk üretirdi)
   const S = o.stop0 != null ? o.stop0 : o.exit == null ? o.stop : null;
   if (S != null && S <= 0) return "Stop fiyatı 0'dan büyük olmalı.";
   if (S != null && (L ? S >= o.entry : S <= o.entry))
@@ -352,7 +353,7 @@ function validate(o) {
   return null;
 }
 
-// FIX(3): kısmi kapatma çekirdeği — UI (closeTrade miktar alanı) ve testler için tek doğruluk kaynağı.
+// kısmi kapatma çekirdeği — UI (closeTrade miktar alanı) ve testler için tek doğruluk kaynağı.
 // Başarı null döner; hata durumunda doğrulama mesajı (string) döner.
 function applyPartial(id, q, p, when) {
   const t = state.trades.find(x => x.id === id);

@@ -49,7 +49,7 @@ function pct(n, d) {
   if (n == null || Number.isNaN(n)) return "—";
   return numF(n, d === undefined ? 1 : d) + "%";
 }
-function rf(r) {
+function formatR(r) {
   return (r < 0 ? "−" : "") + numF(Math.abs(r), 2) + "R";
 }
 const ORD = [
@@ -134,7 +134,7 @@ function weekdayOf(date) {
   return ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"][d.getDay()];
 }
 
-// FIX(5): tarih damgası normalize — TR/ISO noktalı tarihler, çoklu boşluklar, saatsiz tarihler
+// tarih damgası normalize — TR/ISO noktalı tarihler, çoklu boşluklar, saatsiz tarihler
 function toStamp(v) {
   let s = String(v || "").trim();
   if (!s) return "";
@@ -177,7 +177,7 @@ function parseCsv(text) {
   }
   return rows;
 }
-// FIX(20): görsel sıkıştırma — canvas ile ≤1280px JPEG; başarısızsa ham dataURL (≤~1,1 MB)
+// görsel sıkıştırma — canvas ile ≤1280px JPEG; başarısızsa ham dataURL (≤~1,1 MB)
 async function imgPrep(file) {
   const M = 1280,
     S = 1500000;

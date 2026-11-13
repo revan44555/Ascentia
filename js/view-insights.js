@@ -5,7 +5,7 @@ function propStatus() {
     .filter(a => a.dl > 0 || a.md > 0)
     .map(a => {
       const cl = state.trades.filter(t => accountId(t) === a.id && pnl(t) != null);
-      const today = cl.filter(t => ek(t).slice(0, 10) === td).reduce((x, t) => x + pnl(t), 0);
+      const today = cl.filter(t => closedAt(t).slice(0, 10) === td).reduce((x, t) => x + pnl(t), 0);
       const balance = num(a.balance) || 0;
       let eq = balance,
         pk = balance,
@@ -55,7 +55,7 @@ function ddCard(trades) {
     Y = v => 6 + (v / mn) * (H - 12),
     d = dd.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" "),
     dt = t => {
-      const x = ek(t).slice(0, 10).split("-");
+      const x = closedAt(t).slice(0, 10).split("-");
       return x[2] + "." + x[1] + "." + x[0].slice(2);
     };
   return `<div class="card"><p class="lbl">Düşüş eğrisi (zirveden uzaklık) · en derin ${money(mn, 2)}</p><svg role="img" aria-label="Düşüş eğrisi" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:110px;display:block;margin-top:8px"><path d="${d} L${W} 6 L0 6 Z" fill="var(--dn)" opacity=".16"/><path d="${d}" fill="none" stroke="var(--dn)" stroke-width="2" vector-effect="non-scaling-stroke"/><line x1="0" x2="${W}" y1="6" y2="6" stroke="var(--border)"/></svg><div class="bar" style="grid-template-columns:1fr auto;margin-top:6px"><span>${dt(cl[0])}</span><span>${dt(cl[cl.length - 1])}</span></div></div>`;
@@ -65,7 +65,7 @@ function monthRows(trades) {
   unitize(trades)
     .filter(t => pnl(t) != null)
     .forEach(t => {
-      const k = ek(t).slice(0, 7),
+      const k = closedAt(t).slice(0, 7),
         r = m.get(k) || { key: k, n: 0, wins: 0, net: 0 };
       r.n++;
       r.net += pnl(t);
@@ -99,7 +99,7 @@ function insightsCard(trades) {
       ? `<div class="card"><p class="lbl">Bulgular</p><p class="subtle" style="margin-top:6px;font-size:14px">10 kapanmış işlemden sonra kalıp analizi burada görünür (şu an ${nCl}).</p></div>`
       : "";
   const out = [];
-  // FIX(10): "Belirsiz" (geçersiz tarihli işlem) de bulgulara karışmaz
+  // "Belirsiz" (geçersiz tarihli işlem) de bulgulara karışmaz
   const skip = r => /^(Etiketsiz|Belirtilmemiş|Belirsiz)$/.test(r.key);
   const worst = (k, f, ok) => {
     const w = breakdown(trades, k)
@@ -121,7 +121,9 @@ function insightsCard(trades) {
       lo = cp.filter(t => t.rt <= 3),
       av = a => a.reduce((x, t) => x + rr(t), 0) / a.length;
     if (hi.length >= 3 && lo.length >= 3)
-      out.push("4-5 puanlı işlemlerde ort. " + rf(av(hi)) + ", düşük puanlılarda " + rf(av(lo)));
+      out.push(
+        "4-5 puanlı işlemlerde ort. " + formatR(av(hi)) + ", düşük puanlılarda " + formatR(av(lo))
+      );
   }
   {
     const avg = a => (a.length ? a.reduce((x, t) => x + rr(t), 0) / a.length : null),
@@ -129,7 +131,9 @@ function insightsCard(trades) {
       f = cl.filter(t => t.chk >= CHK.length),
       e = cl.filter(t => t.chk < CHK.length);
     if (f.length >= 3 && e.length >= 3)
-      out.push("Kontrol listesi tam işlemlerde ort. " + rf(avg(f)) + ", eksiklerde " + rf(avg(e)));
+      out.push(
+        "Kontrol listesi tam işlemlerde ort. " + formatR(avg(f)) + ", eksiklerde " + formatR(avg(e))
+      );
   }
   const b = bestSetup(trades);
   if (b && b.net > 0) out.push("En iyi setup: " + b.key + ", " + b.n + " işlem " + money(b.net));
@@ -156,10 +160,10 @@ function distCards(trades) {
     const n = rs.filter(f).length;
     return { k, v: i < 3 ? -n : n, t: n };
   });
-  // FIX(15): saat dağılımı da diğer istatistiklerle tutarlı olarak çıkış zamanına (ek) göre
+  // saat dağılımı da diğer istatistiklerle tutarlı olarak çıkış zamanına (closedAt) göre
   const h = new Map();
   cl.forEach(t => {
-    const k = String(ek(t) || "").slice(11, 13);
+    const k = String(closedAt(t) || "").slice(11, 13);
     if (!k) return;
     h.set(k, (h.get(k) || 0) + pnl(t));
   });
@@ -175,14 +179,14 @@ function wkKey() {
   const y = t.getUTCFullYear();
   return y + "-W" + Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7);
 }
-const lsg = k => {
+const readLocal = k => {
     try {
       return localStorage.getItem(k) || "";
     } catch (e) {
       return "";
     }
   },
-  lss = (k, v) => {
+  writeLocal = (k, v) => {
     try {
       localStorage.setItem(k, v);
     } catch (e) {}
@@ -195,11 +199,11 @@ const CHK = [
 ];
 const chkKey = () => "tj_chk_" + todayStamp();
 function checklistCard() {
-  const v = lsg(chkKey());
+  const v = readLocal(chkKey());
   return `<details class="dt"><summary>İşlem öncesi kontrol <span id="chkN" class="mono">${[...v].filter(c => c === "1").length}/${CHK.length}</span></summary><div class="stack" style="margin:8px 0">${CHK.map((x, i) => `<label class="chk"><input type="checkbox" data-chk="${i}"${v[i] === "1" ? " checked" : ""}> ${x}</label>`).join("")}</div></details>`;
 }
 function reviewCard() {
-  return `<details class="dt"><summary><span>Haftalık değerlendirme <small class="subtle" style="margin-left:6px">${lsg("tj_review_" + wkKey()) ? "yazıldı ✓" : "bu haftanın notu"}</small></span></summary><textarea class="inp" rows="4" id="wkNote" aria-label="Haftalık değerlendirme" placeholder="Bu hafta neyi iyi yaptım, neyi tekrarlamayacağım?" style="margin:8px 0">${esc(lsg("tj_review_" + wkKey()))}</textarea></details>`;
+  return `<details class="dt"><summary><span>Haftalık değerlendirme <small class="subtle" style="margin-left:6px">${readLocal("tj_review_" + wkKey()) ? "yazıldı ✓" : "bu haftanın notu"}</small></span></summary><textarea class="inp" rows="4" id="wkNote" aria-label="Haftalık değerlendirme" placeholder="Bu hafta neyi iyi yaptım, neyi tekrarlamayacağım?" style="margin:8px 0">${esc(readLocal("tj_review_" + wkKey()))}</textarea></details>`;
 }
 const OPENS = new Set(),
   dKey = d => {
@@ -224,7 +228,7 @@ new MutationObserver(() =>
   })
 ).observe(document.getElementById("view"), { childList: true });
 document.addEventListener("input", e => {
-  if (e.target.id === "wkNote") lss("tj_review_" + wkKey(), e.target.value);
+  if (e.target.id === "wkNote") writeLocal("tj_review_" + wkKey(), e.target.value);
 });
 document.addEventListener("change", e => {
   if (e.target.dataset && e.target.dataset.chk !== undefined) {
@@ -232,7 +236,7 @@ document.addEventListener("change", e => {
       const c = document.querySelector('[data-chk="' + i + '"]');
       return c && c.checked ? "1" : "0";
     }).join("");
-    lss(chkKey(), v);
+    writeLocal(chkKey(), v);
     const n = document.getElementById("chkN");
     if (n) n.textContent = [...v].filter(c => c === "1").length + "/" + CHK.length;
   }
@@ -343,7 +347,8 @@ ${kpi("Beklenti", s.expectancy == null ? "—" : money(s.expectancy), s.expectan
 ${kpi("Kazanç/kayıp", s.payoff == null ? "—" : numF(s.payoff, 2), "", "sm", "Ortalama kazanç ÷ ortalama kayıp.")}
 ${kpi("Kazanç serisi", String(s.streakWin), "", "sm", "En uzun üst üste kazanç.")}
 ${kpi("Kayıp serisi", String(s.streakLoss), "", "sm", "En uzun üst üste kayıp.")}</div>`;
-  const bt = (t, k, f) => breakdownTable(t, breakdown(trades, k).filter(f || (() => true))),
+  const breakdownSection = (t, k, f) =>
+      breakdownTable(t, breakdown(trades, k).filter(f || (() => true))),
     G = x => `<div class="ins-grid">${x}</div>`;
   let body;
   if (INS_TAB === "zaman")
@@ -352,27 +357,29 @@ ${kpi("Kayıp serisi", String(s.streakLoss), "", "sm", "En uzun üst üste kayı
       G(distCards(trades)) +
       breakdownTable("Ay", monthRows(trades)) +
       G(
-        bt("Gün", "weekday") +
-          bt("Seans (Londra)", "session") +
-          bt("Tutma süresi", "hold", r => r.key !== "Belirsiz")
+        breakdownSection("Gün", "weekday") +
+          breakdownSection("Seans (Londra)", "session") +
+          breakdownSection("Tutma süresi", "hold", r => r.key !== "Belirsiz")
       );
   else if (INS_TAB === "strateji")
     body = G(
-      bt("Setup", "setup") +
-        bt("Sembol", "symbol") +
-        bt("Yön", "dir") +
+      breakdownSection("Setup", "setup") +
+        breakdownSection("Sembol", "symbol") +
+        breakdownSection("Yön", "dir") +
         (state.accounts.length > 1 ? breakdownTable("Hesap", accRows(trades)) : "")
     );
   else if (INS_TAB === "davranis")
     body = G(
-      bt("Duygu", "emo") + bt("Hata", "mist", r => r.key !== "Etiketsiz") + bt("Plan", "plan")
+      breakdownSection("Duygu", "emo") +
+        breakdownSection("Hata", "mist", r => r.key !== "Etiketsiz") +
+        breakdownSection("Plan", "plan")
     );
   else
     body = `<div class="g4">
 ${kpi("Net P&L", money(s.net), s.net > 0 ? "up" : s.net < 0 ? "dn" : "muted", "", "Komisyon düşüldükten sonra toplam kâr/zarar.")}
 ${kpi("Kazanma oranı", s.winRate == null ? "—" : Math.round(s.winRate) + "%", "", "", "Kârla kapanan işlemlerin yüzdesi.")}
 ${kpi("Kâr faktörü", s.profitFactor == null ? (s.closed ? "Zarar yok" : "—") : numF(s.profitFactor, 2), "", "", "Toplam kâr ÷ toplam zarar. 1'in üstü kârlı demektir.")}
-${kpi("Ort. R", s.avgR == null ? (s.closed ? "Stop yok" : "—") : rf(s.avgR), s.avgR != null && s.avgR > 0 ? "up" : s.avgR != null && s.avgR < 0 ? "dn" : "muted", "", "Kazancın riske oranı. 1R = riske ettiğin tutar.")}
+${kpi("Ort. R", s.avgR == null ? (s.closed ? "Stop yok" : "—") : formatR(s.avgR), s.avgR != null && s.avgR > 0 ? "up" : s.avgR != null && s.avgR < 0 ? "dn" : "muted", "", "Kazancın riske oranı. 1R = riske ettiğin tutar.")}
 </div>${equityChart(equityPoints(trades))}${G(ddCard(trades) + insightsCard(trades))}${stats}`;
   if (!body.replace(/<[^>]*>/g, "").trim())
     body =

@@ -331,7 +331,7 @@ async function loadAll() {
   } catch (e) {}
   applyTheme();
 }
-// DEĞİŞİKLİK (iOS): theme-color artık iOS arka plan renkleriyle eşleşiyor
+// theme-color iOS arka plan renkleriyle eşleşir
 function applyTheme() {
   document.documentElement.classList.toggle("light", state.theme === "light");
   document.documentElement.classList.toggle("dark", state.theme !== "light");
