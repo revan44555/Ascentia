@@ -52,7 +52,7 @@ ${state.file==="need"?`<div class="card"><p style="font-weight:500">Otomatik kay
 
 </div>`}
 
-const listState={q:"",side:"",result:"",limit:50};
+const listState={q:"",side:"",result:"",limit:20};
 function filteredTrades(){let list=filterAccount(state.trades,state.filterAccountId).filter(inRange);
 const needle=listState.q.trim().toLowerCase();
 if(needle){const nu=listState.q.trim().toUpperCase().replace(/[^A-Z0-9]/g,""),al=ALIAS[nu]?ALIAS[nu].toLowerCase():"";list=list.filter(t=>{const h=[t.symbol,t.setup,t.emo,t.mist,t.notes].join(" ").toLowerCase();return h.includes(needle)||(al&&h.includes(al))})}
