@@ -548,3 +548,15 @@ button.home-settings { font:inherit;cursor:pointer; }
 .ins-grid>*{min-width:0}
 @media(min-width:760px){.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.ins-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(min-width:1024px){main.m{max-width:1040px}}
+
+
+/* ===== Geçiş performansı (sekme değiştirirken takılmayı azaltır) =====
+   - kart giriş animasyonunun kademeli gecikmesi ilk 6 kartla sınırlı (50 kartlık listede son kart 1,2 sn'de görünüyordu)
+   - kart kenarındaki çizgi animasyonu kaldırıldı (her kartta ayrı animasyon = pahalı stil hesabı)
+   - alt menü ve sekme çubuğunda backdrop-filter yerine opak zemin (Firefox/mobilde en pahalı efekt)
+   - ekran dışındaki liste kartları çizilmez (content-visibility) */
+.enter .card,.enter .empty-hero>*{animation-delay:calc(min(var(--i,0),6)*24ms)}
+.enter .trade-card::before{animation:none}
+nav.bottom{background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}
+.seg{background:var(--elevated);backdrop-filter:none;-webkit-backdrop-filter:none}
+.gap2>a.block{content-visibility:auto;contain-intrinsic-size:auto 76px}
