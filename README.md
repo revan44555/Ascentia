@@ -27,25 +27,26 @@ Uygulamanın kendisi bağımlılıksızdır; araçlar yalnızca geliştirme içi
 | `npm run format` | Prettier ile biçimlendirir (`.prettierrc`, `.editorconfig`) |
 | `npm run check` | biçim + lint + test (CI'da da çalışır) |
 
-Kod düzeni: `js/` dosyaları tek ortak global kapsamı paylaşır ve `index.html`'deki sırayla yüklenir.
-Tıklama olayları `app.js` içinde tablo güdümlüdür (`CLICK_ATTRS` + `ACTIONS`): yeni bir düğme eklemek için
-`data-act="<eylem>"` yazıp `ACTIONS`'a bir işlev eklemek yeterlidir.
+Yeni özellik eklemek için **mevcut dosyalara dokunmana gerek yok**: yeni bir `js/view-*.js` dosyası kendini
+`Core.route / nav / action / listen` ile kaydeder. Adım adım tarif ve kurallar: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Mimari
 ```
 index.html          kabuk (tek sayfa, hash router)
 css/style.css       tek dosya tasarım sistemi (token tabanlı)
+js/core.js          çekirdek: yol, menü, eylem, tıklama ve olay kayıt defteri (ilk yüklenen dosya)
 js/utils.js         sayı/tarih/para biçimlendirme, CSV ayrıştırma
 js/calc.js          P&L, risk, R, özet istatistikler, dağılımlar, doğrulama, kısmi kapatma çekirdeği
 js/storage.js       localStorage + IndexedDB çift depolama, yedek/geri yükleme, CSV içe aktarma
 js/symbols.js       enstrüman çarpanları ve sembol eşleme
+js/services.js      birden çok ekranın ortak işleri (CSV üretimi, etiket ekleme, indirme)
 js/ui.js            ortak UI bileşenleri
-js/view-home.js     Bugün + İşlemler listesi
+js/view-home.js     Bugün + İşlemler listesi (yol, menü ve eylemlerini kendisi kaydeder)
 js/view-add.js      Ekle/Düzenle formu
 js/view-insights.js Analiz ekranı
 js/view-more.js     Ayarlar, hesap/etiket/veri sayfaları, işlem detayı
-js/app.js           router, form akışı, olay handlerları
-tests/run.js        Node tabanlı regresyon testleri (sahte DOM)
+js/app.js           açılış, render() ve olayları Core'a ileten tek dinleyici
+tests/run.js        Node tabanlı regresyon + mimari kuralı testleri (sahte DOM)
 tests/e2e.js        Gerçek tarayıcı (Playwright) tıklama testleri
 tests/lint.js       Birleşik kapsam lint kontrolü
 ```

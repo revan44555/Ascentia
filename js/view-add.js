@@ -86,7 +86,7 @@ function showFormErr(msg) {
     if (k === "exitDate" ? !moreOpen : !(moreOpen && techOpen())) {
       moreOpen = true;
       if (k !== "exitDate") techForce = true;
-      render();
+      Core.refresh();
     }
   }
   document.querySelectorAll(".ferr").forEach(p => (p.textContent = ""));
@@ -261,3 +261,351 @@ ${textField("fx", "P&L kuru (işlem → hesap para birimi, boşsa 1)")}
 <div class="savebar"><p id="err" class="dn" role="alert" style="font-size:14px;color:var(--dn);margin-bottom:6px"></p><button type="button" class="btn lg primary" data-act="save">Kaydet</button></div>
 </div>`;
 }
+
+/* ---- Form mantığı ---- */
+function tradeSig(t) {
+  return t ? JSON.stringify(fromTrade(t)) : "";
+}
+function formDirty() {
+  const b = form.id && state.trades.find(t => t.id === form.id),
+    ref = b ? fromTrade(b) : emptyForm();
+  return Object.keys(form).some(
+    k => !k.startsWith("__") && k !== "multAuto" && (k !== "date" || b) && form[k] !== ref[k]
+  );
+}
+function saveForm() {
+  if (!form) return;
+  ["entry", "stop", "tp", "stop0", "exit"].forEach(k => {
+    if (form[k] !== "") form[k] = fixThou(form.symbol, form[k]);
+  });
+  const sym = String(form.symbol || "")
+    .trim()
+    .toUpperCase();
+  if (sym) {
+    const r = symFind(sym);
+    if (r.exact) applySym(r.exact);
+  }
+  const q0 = form.qty;
+  applySym(sym);
+  form.qty = q0;
+  const now = nowLocal();
+  const ex0 = form.exit === "" || form.exit == null ? null : num(form.exit);
+  // çıkış yoksa "plana uydu" etiketi kaydedilmez
+  const rec = {
+    id: form.id || newId(),
+    date: form.date || now,
+    symbol: sym,
+    dir: form.dir,
+    entry: num(form.entry),
+    exit: ex0,
+    qty: num(form.qty),
+    mult: num(form.mult) || 1,
+    acc: form.acc || "",
+    plan: ex0 != null ? form.plan : "",
+    mist: form.mist || "",
+    stop: form.stop === "" ? null : num(form.stop),
+    stop0: form.stop0 === "" ? null : num(form.stop0),
+    tp: form.tp === "" ? null : num(form.tp),
+    fees: num(form.fees) || 0,
+    fx: num(form.fx) > 0 ? num(form.fx) : 1,
+    exitDate: form.exitDate || "",
+    setup: form.setup || "",
+    emo: form.emo || "",
+    notes: form.notes || "",
+    rt: num(form.rt),
+    img: form.img || "",
+  };
+  const old0 = form.id ? state.trades.find(t => t.id === form.id) : null;
+  rec.qc = old0 ? old0.qc || 0 : form.qc || 0;
+  let chkToday = null;
+  try {
+    const s0 = localStorage.getItem("tj_chk_" + todayStamp());
+    if (typeof s0 === "string" && s0.length) chkToday = [...s0].filter(c => c === "1").length;
+  } catch (e) {}
+  rec.chk = old0 ? old0.chk : chkToday;
+  if (old0 && old0.grp) rec.grp = old0.grp;
+  const qc =
+    QCUR[sym] ||
+    (SYMS.find(x => x[0] === sym) &&
+    SYMS.find(x => x[0] === sym)[2] === "Forex" &&
+    !sym.endsWith("USD")
+      ? sym.slice(3, 6)
+      : "");
+  const accCur = ((accountOf(rec) || {}).cur || state.prefsCur || "USD").toUpperCase();
+  if (qc && qc !== accCur && rec.fx === 1 && ex0 != null) {
+    showFormErr(
+      "P&L kuru gerekli (" +
+        qc +
+        " → " +
+        (state.prefsCur || "USD") +
+        "). Gelişmiş → P&L kuru alanına gir."
+    );
+    return;
+  }
+  const msg = validate(rec);
+  if (msg) {
+    showFormErr(msg);
+    const g = $("#symsug");
+    if (g) g.innerHTML = symHint(true);
+    return;
+  }
+  if (ex0 != null && !rec.exitDate) rec.exitDate = now;
+  try {
+    localStorage.removeItem("tj_draft");
+  } catch (e) {}
+  const i = state.trades.findIndex(t => t.id === rec.id);
+  if (i >= 0) state.trades[i] = rec;
+  else state.trades.push(rec);
+  saveTrades(state.trades);
+  LASTLOT[sym] = rec.qty;
+  try {
+    localStorage.setItem("tj_lastlot_v1", JSON.stringify(LASTLOT));
+  } catch (e) {}
+  const justAdded = rec.id;
+  form = null;
+  location.replace("#/trades/" + encodeURIComponent(justAdded));
+  if (i < 0) toast("Kaydedildi");
+}
+/** Hızlı giriş zamanı: "N dakika önce". */
+function onQuickEntryTime(el) {
+  form.date = toLocalInput(new Date(Date.now() - +el.dataset.qd * 6e4));
+  const input = document.querySelector('[data-f="date"]');
+  if (input) input.value = form.date;
+}
+
+/** Hızlı çıkış zamanı: girişten N dakika sonra (gelecekteyse şimdiye çekilir). */
+function onQuickExitTime(el) {
+  const exitAt = toLocalInput(new Date(new Date(form.date).getTime() + +el.dataset.qx * 6e4));
+  const now = toLocalInput(new Date());
+  form.exitDate = exitAt > now ? now : exitAt;
+  const input = document.querySelector('[data-f="exitDate"]');
+  if (input) input.value = form.exitDate;
+}
+/** İşlem formundaki seçim düğmesi (yön, hesap, setup, duygu, plan, puan …). */
+function onFormChip(el) {
+  const key = el.dataset.chip,
+    value = el.dataset.v;
+  if (key === "acc" || key === "dir") {
+    form[key] = value;
+    Core.refresh();
+    return;
+  }
+  // allowOff: aynı düğmeye tekrar basınca seçim kalkar (data-off="0" ise kalkmaz)
+  form[key] = form[key] === value && el.dataset.off !== "0" ? "" : value;
+  if (key === "rt") {
+    Core.refresh();
+    return;
+  }
+  const on = form[key] === value;
+  el.classList.toggle("on", on);
+  el.classList.toggle("off", !on);
+  el.setAttribute("aria-pressed", on);
+}
+/** Formdaki sembolü "özel sembol" olarak listeye ekler. */
+function addCustomSymbol() {
+  const raw = (form.symbol || "").trim().toUpperCase();
+  if (raw.length < 2) {
+    toast("En az 2 karakter");
+    return;
+  }
+  if (!state.tags.syms.includes(raw)) {
+    state.tags.syms.push(raw);
+    saveTags(state.tags);
+  }
+  applySym(raw);
+  Core.refresh();
+}
+/** İşlemi yeni kayıt şablonu olarak kopyalar (id olmadan, şimdiki zamanla). */
+function cloneTrade(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade) return;
+  const copy = fromTrade(trade);
+  delete copy.id;
+  form = { ...copy, date: nowLocal(), __for: "/add" };
+  location.hash = "#/add";
+  Core.refresh();
+}
+
+/** /add açılırken formu hazırlar: düzenleme, taslak geri yükleme ya da boş form. */
+function enterAdd({ path, params }) {
+  const d = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("tj_draft") || "null");
+    } catch (e) {
+      return null;
+    }
+  })();
+  if (form !== null && form.__for === path + (params.id || "")) return;
+  if (params.id) {
+    const tr0 = state.trades.find(t => t.id === params.id);
+    form = tr0 ? fromTrade(tr0) : emptyForm();
+    // yarım kalmış düzenleme taslaktan geri yüklenir
+    if (tr0 && d && d.__editId === params.id && d.__sig === tradeSig(tr0))
+      Object.assign(form, d, { date: form.date });
+  } else {
+    const e = emptyForm();
+    form = Object.assign(e, d && d.__editId ? { ...d, __editId: null, id: undefined } : d || {}, {
+      date: e.date,
+    });
+  }
+  form.__for = path + (params.id || "");
+}
+
+/** Formdan ayrılırken (başka sayfaya geçerken) yarım kalan form taslak olarak saklanır. */
+function leaveAdd(hash) {
+  if (hash.startsWith("#/add")) return;
+  // düzenleme formları da taslak olarak korunur (anahtar: __editId)
+  if (form && form.__for && form.__for.startsWith("/add") && formDirty()) {
+    try {
+      localStorage.setItem(
+        "tj_draft",
+        JSON.stringify({
+          ...form,
+          __editId: form.id || null,
+          __sig: form.id ? tradeSig(state.trades.find(t => t.id === form.id)) : "",
+        })
+      );
+    } catch (e) {}
+  }
+  form = null;
+}
+
+function onFormInput(e) {
+  const t = e.target;
+  if (t.dataset.tagdraft !== undefined) {
+    if (tagDraft) tagDraft.value = t.value;
+    return true;
+  }
+  if (!form) return true;
+  if (t.dataset.f === undefined) return true;
+  const f = t.dataset.f;
+  let v = t.value;
+  if (["entry", "stop", "tp", "stop0", "exit"].includes(f)) {
+    const f2 = fixThou(form.symbol, v);
+    if (f2 !== v) {
+      t.value = f2;
+      v = f2;
+    }
+  }
+  form[f] = v;
+  if (f === "symbol") {
+    const r = symFind(v);
+    if (r.exact) applySym(r.exact);
+    form.symbol = v;
+    const mi = document.querySelector("[data-f=mult]");
+    if (mi && form.multAuto) mi.value = form.mult;
+    const su = $("#symsug");
+    if (su) su.innerHTML = symHint(false);
+    return true;
+  }
+  if (f === "exit") {
+    const pw = $("#planwrap");
+    if (pw) pw.hidden = !t.value.trim();
+    // çıkış silinirken plan etiketi de temizlenir
+    if (!t.value.trim()) {
+      form.plan = "";
+      document.querySelectorAll('[data-chip="plan"]').forEach(c => {
+        c.classList.remove("on");
+        c.classList.add("off");
+        c.setAttribute("aria-pressed", "false");
+      });
+    }
+    const lh = $("#liveh");
+    if (lh) lh.innerHTML = liveHint();
+    return true;
+  }
+  if (f === "exitDate" || f === "date" || f === "fees") {
+    const lh = $("#liveh");
+    if (lh) lh.innerHTML = liveHint();
+    return true;
+  }
+  if (
+    f === "stop" ||
+    f === "stop0" ||
+    f === "tp" ||
+    f === "qty" ||
+    f === "mult" ||
+    f === "fx" ||
+    f === "entry"
+  ) {
+    const lh = $("#liveh");
+    if (lh) lh.innerHTML = liveHint();
+    return true;
+  }
+}
+
+Core.nav({
+  path: "/add",
+  label: "Ekle",
+  order: 30,
+  cls: "add",
+  side: `<path d="M5 12h14"/><path d="M12 5v14"/>`,
+  bottom: `<path d="M12 5v14M5 12h14"/>`,
+});
+Core.route("/add", { nav: "/add", enter: enterAdd, view: viewAdd });
+Core.on("navigate", leaveAdd);
+Core.click("qd", { run: onQuickEntryTime });
+Core.click("qx", { when: () => form && form.date, run: onQuickExitTime });
+Core.click("chip", { when: () => form, run: onFormChip });
+Core.click("sym", {
+  run: el => {
+    applySym(el.dataset.sym);
+    Core.refresh();
+  },
+});
+Core.action("save", () => saveForm());
+Core.action("imgdel", () => {
+  if (form) form.img = "";
+  Core.refresh();
+});
+Core.action("togglemore", () => {
+  moreOpen = !moreOpen;
+  Core.refresh();
+});
+Core.action("tagdraft", el => {
+  tagDraft = { kind: el.dataset.kind, value: "" };
+  Core.refresh();
+});
+Core.action("addsym", addCustomSymbol);
+Core.action("clone", cloneTrade);
+Core.listen("input", onFormInput);
+Core.listen("change", e => {
+  const t = e.target;
+  if (t.dataset.file !== "img") return;
+  const f = t.files[0];
+  t.value = "";
+  if (!f) return true;
+  if (!/^image\//.test(f.type)) {
+    toast("Görsel dosyası seç", "err");
+    return true;
+  }
+  imgPrep(f)
+    .then(u => {
+      if (!form) return;
+      form.img = u;
+      Core.refresh();
+      toast("Görsel eklendi");
+    })
+    .catch(() => toast("Görsel eklenemedi (çok büyük olabilir)", "err"));
+  return true;
+});
+// Enter sonraki alana geçer, son alanda kaydeder; datetime dahil tutarlı
+Core.listen("keydown", e => {
+  if (e.key !== "Enter") return;
+  if (e.target.dataset.f && e.target.tagName === "INPUT") {
+    e.preventDefault();
+    const all = [...document.querySelectorAll("#view input[data-f]")],
+      i = all.indexOf(e.target);
+    if (all[i + 1]) all[i + 1].focus();
+    else saveForm();
+    return true;
+  }
+  if (e.target.dataset.tagdraft !== undefined && tagDraft) {
+    e.preventDefault();
+    const v = e.target.value,
+      kind = tagDraft.kind;
+    tagDraft = null;
+    addTag(kind, v);
+    return true;
+  }
+});

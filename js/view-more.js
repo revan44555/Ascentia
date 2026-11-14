@@ -27,28 +27,6 @@ function backupNote() {
     ? "Son yedek: " + new Date(state.lastBackupAt).toLocaleDateString("tr-TR") + "."
     : "Hiç yedek almadın.";
 }
-function typedConfirm(m) {
-  const v = prompt(m + "\n\nOnaylamak için SİL yaz.");
-  return v != null && v.trim().toLocaleUpperCase("tr-TR").replace("İ", "I") === "SIL";
-}
-const TAGKIND = [
-  ["setups", "Setup"],
-  ["emos", "Duygu"],
-  ["mists", "Hata"],
-];
-function addTag(k, v) {
-  const raw = (v || "").trim(),
-    n = raw.slice(0, 24),
-    lc = x => x.toLocaleLowerCase("tr");
-  if (!n) return;
-  if (state.tags[k].some(x => lc(x) === lc(n))) {
-    toast("Bu etiket zaten var");
-    return;
-  }
-  state.tags[k].push(n);
-  saveTags(state.tags);
-  render();
-}
 function pageHead(t, back) {
   return `<header class="page-h">${back ? `<a class="bk" href="#/more">‹ Daha</a>` : `<p class="eyebrow">Ayarlar</p>`}<h1>${t}</h1></header>`;
 }
@@ -196,3 +174,301 @@ ${longNote || needFix ? `<div class="card"><p class="lbl">Notlar</p>${longNote ?
 <div class="actrow"><a class="btn md secondary" href="#/add?id=${encodeURIComponent(t.id)}">Düzenle</a><button type="button" class="btn md secondary" data-act="clone" data-id="${esc(t.id)}">Kopyala</button><button type="button" class="btn md danger" data-act="deltrade" data-id="${esc(t.id)}">Sil</button></div>
 </div>`;
 }
+
+/* ---- Ayarlar, hesaplar, etiketler, veri ve işlem ayrıntısı ---- */
+let accTimer = null,
+  INSTALL_PROMPT = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  INSTALL_PROMPT = e;
+  Core.refresh();
+});
+/** Yedeği paylaş (destekleniyorsa) ya da dosya olarak indir. */
+function exportJson() {
+  const json = backupJson();
+  markBackup();
+  if (navigator.share) {
+    const file = new File([json], "ascentia-defter.json", { type: "application/json" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "Ascentia yedek" }).catch(() => {});
+      Core.refresh();
+      return;
+    }
+  }
+  downloadText("ascentia-defter.json", json, "application/json");
+  toast("Yedek indirildi");
+  Core.refresh();
+}
+function addAccount() {
+  const input = document.querySelector("[data-newacc]");
+  const name = ((input && input.value) || "").trim().slice(0, 24);
+  if (!name) {
+    toast("Hesap adı gir");
+    return;
+  }
+  state.accounts.push({
+    id: "a" + Date.now().toString(36),
+    name,
+    balance: 0,
+    dl: 0,
+    md: 0,
+    cur: "",
+  });
+  saveAccounts(state.accounts);
+  Core.refresh();
+}
+
+function deleteAccount(el) {
+  const id = el.dataset.id;
+  if (state.accounts.length <= 1) {
+    toast("Son hesap silinemez", "err");
+    return;
+  }
+  if (state.trades.some(t => accountId(t) === id)) {
+    toast("Bu hesapta işlem var", "err");
+    return;
+  }
+  if (!typedConfirm("Hesap silinsin mi?")) return;
+  state.accounts = state.accounts.filter(a => a.id !== id);
+  if (state.filterAccountId === id) state.filterAccountId = "all";
+  saveAccounts(state.accounts);
+  Core.refresh();
+}
+/** İşlemi siler; 6 sn boyunca "Geri al" sunar. */
+function deleteTrade(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade) return;
+  if (!typedConfirm("İşlem silinsin mi? (" + trade.symbol + " " + formatWhen(trade.date) + ")")) {
+    return;
+  }
+  const index = state.trades.indexOf(trade);
+  state.trades.splice(index, 1);
+  saveTrades(state.trades);
+  location.hash = "#/trades";
+  toast("Silindi", null, 6000, {
+    label: "Geri al",
+    fn: () => {
+      state.trades.splice(index, 0, trade);
+      saveTrades(state.trades);
+      Core.refresh();
+    },
+  });
+}
+/** Tüm verileri siler (localStorage + IndexedDB). Tema ve bağlı dosya adı korunur. */
+function resetAllData() {
+  if (!typedConfirm("TÜM veriler silinsin mi?")) return;
+  const theme = state.theme,
+    fileName = state.fileName;
+  try {
+    localStorage.clear();
+  } catch (e) {}
+  wipeStores();
+  saveTheme(theme);
+  Object.assign(state, {
+    trades: [],
+    accounts: [{ id: "a1", name: "Ana hesap", balance: 0, dl: 0, md: 0, cur: "" }],
+    tags: JSON.parse(JSON.stringify(DEFAULT_TAGS)),
+    filterAccountId: "all",
+    lastBackupAt: null,
+    memoryOnly: false,
+    file: "none",
+    fileName,
+    theme,
+  });
+  saveBackupStamp("");
+  location.hash = "#/";
+  Core.refresh();
+}
+/** Açık pozisyonu kapatır: miktar boşsa tamamını, daha küçükse kısmen (applyPartial). */
+function closeTrade(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade || trade.exit != null) return;
+  const price = num($("#cx").value),
+    qty = $("#cq") ? num($("#cq").value) : null,
+    errEl = $("#fe-cq");
+  if (price == null || price <= 0) {
+    if (errEl) errEl.textContent = "Geçerli bir çıkış fiyatı gir.";
+    return;
+  }
+  if (qty != null) {
+    const error = applyPartial(trade.id, qty, price);
+    if (error) {
+      if (errEl) errEl.textContent = error;
+      return;
+    }
+    toast(
+      "Kısmi kapatıldı: " + numF(qty, 2) + " @ " + numF(price, 4) + " · kalan " + numF(trade.qty, 2)
+    );
+    Core.refresh();
+    return;
+  }
+  trade.exit = price;
+  trade.exitDate = nowLocal() < trade.date ? trade.date : nowLocal();
+  saveTrades(state.trades);
+  Core.refresh();
+}
+
+function onAccountInput(t) {
+  // hesap alanları her tuşta IndexedDB'ye yazmaz — 400 ms debounce
+  if (t.dataset.aid === undefined) return;
+  const [f, id] = t.dataset.aid.split(":");
+  const a = state.accounts.find(x => x.id === id);
+  if (!a) return;
+  a[f] =
+    f === "name"
+      ? (t.value || "").toString().slice(0, 32)
+      : f === "cur"
+        ? (t.value || "").toUpperCase().slice(0, 3)
+        : num(t.value) || 0;
+  if (f === "cur" && a.cur) state.prefsCur = a.cur;
+  clearTimeout(accTimer);
+  accTimer = setTimeout(() => saveAccounts(state.accounts), 400);
+}
+
+function importCsvFile(file) {
+  file
+    .text()
+    .then(txt => {
+      const st = importCsv(txt);
+      state.trades = st.trades;
+      saveTrades(state.trades);
+      if (st.added) {
+        toast(
+          st.added +
+            " işlem içe aktarıldı" +
+            (st.skipped ? " · " + st.skipped + " atlandı" : "") +
+            (st.why ? " (" + st.why + ")" : "")
+        );
+        if (st.nofx)
+          toast(st.nofx + " işlemde P&L kuru eksik — kapanmış sonuçlar bozuk olabilir", "err");
+      } else {
+        toast("İçe aktarılamadı: " + (st.why || "satır bulunamadı"), "err");
+      }
+    })
+    .catch(() => toast("CSV okunamadı", "err"));
+}
+
+function importJsonFile(file, merge) {
+  file
+    .text()
+    .then(txt => {
+      let raw;
+      try {
+        raw = JSON.parse(txt);
+      } catch (e2) {
+        toast("JSON okunamadı", "err");
+        return;
+      }
+      if (merge) {
+        const r = jsonmerge(raw);
+        toast(r ? r.added + " eklendi · " + r.skipped + " atlandı" : "Geçersiz yedek", "err");
+        if (r) Core.refresh();
+        return;
+      }
+      const n = restoreJson(raw, !state.trades.length);
+      if (n != null) {
+        saveTrades(state.trades);
+        saveAccounts(state.accounts);
+        saveTags(state.tags);
+        toast(n + " işlem geri yüklendi");
+      }
+      Core.refresh();
+    })
+    .catch(() => toast("Dosya okunamadı", "err"));
+}
+
+Core.nav({
+  path: "/more",
+  label: "Daha",
+  order: 50,
+  side: `<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>`,
+  bottom: `<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>`,
+});
+Core.route("/more", { nav: "/more", view: viewMore });
+Core.route("/more/accounts", { nav: "/more", view: viewAccounts });
+Core.route("/more/tags", { nav: "/more", view: viewTags });
+Core.route("/more/data", { nav: "/more", view: viewMoreData });
+Core.route("/trades/:id", { nav: "/trades", view: ({ args }) => viewTradeDetail(args.id) });
+Core.action("install", () => {
+  if (!INSTALL_PROMPT) return;
+  INSTALL_PROMPT.prompt();
+  INSTALL_PROMPT = null;
+  Core.refresh();
+});
+Core.action("theme", el => {
+  state.theme = el.dataset.v;
+  saveTheme(state.theme);
+  document.documentElement.classList.add("tx");
+  applyTheme();
+  setTimeout(() => document.documentElement.classList.remove("tx"), 400);
+  Core.refresh();
+});
+Core.action("jsonexport", exportJson);
+Core.action("csvexport", () => {
+  const csv = tradesToCsv(filterAccount(state.trades, state.filterAccountId));
+  downloadText("ascentia-islemler.csv", csv, "text/csv");
+  toast("CSV indirildi");
+});
+Core.action("jsonmerge", () => {
+  const input = document.querySelector('[data-file="json"]');
+  if (!input) return;
+  input.dataset.merge = "1";
+  input.click();
+});
+Core.action("linkfile", () => linkFile());
+Core.action("unlinkfile", () => {
+  unlinkFile();
+  toast("Otomatik kayıt kapatıldı");
+});
+Core.action("fileresume", () => resumeFile());
+Core.action("addacc", addAccount);
+Core.action("delacc", deleteAccount);
+Core.action("addtag", el => {
+  const input = document.querySelector('[data-newtag="' + el.dataset.kind + '"]');
+  addTag(el.dataset.kind, input ? input.value : "");
+});
+Core.action("deltag", el => {
+  const { kind, v } = el.dataset; // şablon: data-kind="setups|emos|mists|syms" data-v="etiket"
+  state.tags[kind] = state.tags[kind].filter(x => x !== v);
+  saveTags(state.tags);
+  Core.refresh();
+});
+Core.action("deltrade", deleteTrade);
+Core.action("clear", resetAllData);
+Core.action("closetrade", closeTrade);
+Core.listen("input", e => {
+  const t = e.target;
+  if (t.dataset.aid !== undefined) {
+    onAccountInput(t);
+    return true;
+  }
+  // yeni etiket / hesap adı alanları yalnızca düğmeyle kaydedilir
+  if (t.dataset.newtag !== undefined || t.dataset.newacc !== undefined) return true;
+});
+Core.listen("change", e => {
+  const t = e.target;
+  if (t.dataset.file !== "csv" && t.dataset.file !== "json") return;
+  const f = t.files[0];
+  const merge = t.dataset.merge === "1";
+  t.value = "";
+  if (!f) return true;
+  if (t.dataset.file === "csv") importCsvFile(f);
+  else importJsonFile(f, merge);
+  return true;
+});
+Core.listen("keydown", e => {
+  if (e.key !== "Enter") return;
+  if (e.target.dataset.newacc !== undefined) {
+    e.preventDefault();
+    const b = document.querySelector('[data-act="addacc"]');
+    if (b) b.click();
+    return true;
+  }
+  if (e.target.dataset.newtag !== undefined) {
+    e.preventDefault();
+    const b =
+      e.target.closest(".card") && e.target.closest(".card").querySelector('[data-act="addtag"]');
+    if (b) b.click();
+    return true;
+  }
+});

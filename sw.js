@@ -1,5 +1,5 @@
 /* Ascentia service worker — uygulama kabugunu onbellege alir, cevrimdisi acilis saglar */
-const CACHE = "ascentia-v5";
+const CACHE = "ascentia-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,10 +8,12 @@ const ASSETS = [
   "./icon-192.png",
   "./icon-512.png",
   "./icon-maskable-512.png",
+  "./js/core.js",
   "./js/utils.js",
   "./js/calc.js",
   "./js/storage.js",
   "./js/symbols.js",
+  "./js/services.js",
   "./js/ui.js",
   "./js/view-home.js",
   "./js/view-add.js",

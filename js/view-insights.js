@@ -287,7 +287,8 @@ ${mn < 0 && mx > 0 ? `<line x1="0" x2="${W}" y1="${Y(0).toFixed(1)}" y2="${Y(0).
 <line id="eqcur" y1="${pt}" y2="${H - pb}" stroke="var(--fg)" stroke-opacity=".35" opacity="0"/>
 </svg>${ticks.map(t => `<span class="eqt mono" style="top:${((Y(t) / H) * 100).toFixed(1)}%">${money(t, 0).replace("+", "")}</span>`).join("")}</div></div>`;
 }
-let calOff = 0;
+let calOff = 0,
+  EQ = null; // denge eğrisi üstündeki imleç için ölçüler (equityChart doldurur)
 function calendarHeat(trades) {
   const MONTHS = [
     "Ocak",
@@ -391,3 +392,55 @@ ${insTabs()}
 ${body}
 </div>`;
 }
+
+/* ---- Bu ekranın etkileşimleri ---- */
+Core.nav({
+  path: "/insights",
+  label: "Analiz",
+  order: 40,
+  side: `<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 13l3-3 4 4 5-6"/>`,
+  bottom: `<path d="M5 20V11M12 20V4M19 20v-6"/>`,
+});
+Core.route("/insights", { nav: "/insights", view: viewInsights });
+Core.click("itab", {
+  run: el => {
+    INS_TAB = el.dataset.itab;
+    Core.refresh();
+  },
+});
+Core.action("calprev", () => {
+  calOff--;
+  Core.refresh();
+});
+Core.action("calnext", () => {
+  calOff++;
+  Core.refresh();
+});
+document.getElementById("view").addEventListener("pointermove", e => {
+  if (!EQ) return;
+  const svg = e.target.closest && e.target.closest("#eqsvg");
+  if (!svg) return;
+  const r = svg.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width) * EQ.W;
+  let i = Math.round(((x - EQ.pl) / EQ.iw) * (EQ.pts.length - 1));
+  i = Math.max(0, Math.min(EQ.pts.length - 1, i));
+  const p = EQ.pts[i],
+    cur = svg.querySelector("#eqcur");
+  if (cur) {
+    cur.setAttribute("x", x.toFixed(1));
+    cur.setAttribute("opacity", "1");
+  }
+  const read = document.getElementById("eqread");
+  if (read)
+    read.textContent = (p.date ? formatWhen(p.date) : "Başlangıç") + " · " + money(p.equity);
+});
+document.getElementById("view").addEventListener("pointerout", e => {
+  if (!EQ) return;
+  if (e.target.closest && e.target.closest("#eqsvg")) return;
+  const svg = document.getElementById("eqsvg");
+  if (!svg) return;
+  const cur = svg.querySelector("#eqcur");
+  if (cur) cur.setAttribute("opacity", "0");
+  const read = document.getElementById("eqread");
+  if (read) read.textContent = "";
+});

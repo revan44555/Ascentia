@@ -142,3 +142,23 @@ function accChips() {
   vv.addEventListener("resize", f);
   f();
 })();
+
+function typedConfirm(m) {
+  const v = prompt(m + "\n\nOnaylamak için SİL yaz.");
+  return v != null && v.trim().toLocaleUpperCase("tr-TR").replace("İ", "I") === "SIL";
+}
+
+/* Ortak tıklamalar: ipucu, tarih aralığı, hesap filtresi */
+Core.click("tip", { when: el => !el.dataset.act, run: el => toast(el.getAttribute("data-tip")) });
+Core.click("facc", {
+  run: el => {
+    state.filterAccountId = el.dataset.facc;
+    Core.refresh();
+  },
+});
+Core.click("rng", {
+  run: el => {
+    RANGE = el.dataset.rng;
+    Core.refresh();
+  },
+});

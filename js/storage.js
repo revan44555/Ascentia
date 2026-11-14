@@ -102,11 +102,14 @@ async function dual(lk, lv, kk, v) {
   } else state.memoryOnly = false;
   queueFile();
 }
+// Kayıttan sonra "saved:<tür>" olayı yayılır; yeni özellikler (yedek, bildirim, eşitleme…) buna bağlanır.
 function saveTrades(t) {
   dual(TRADES_KEY, JSON.stringify(t), "trades", t);
+  Core.emit("saved:trades", t);
 }
 function saveAccounts(a) {
   dual(ACC_KEY, JSON.stringify(a), "accounts", a);
+  Core.emit("saved:accounts", a);
 }
 function saveTags(t) {
   dual(
@@ -115,6 +118,7 @@ function saveTags(t) {
     "tags",
     t
   );
+  Core.emit("saved:tags", t);
 }
 // Sıfırlama: localStorage.clear() tek başına yetmez, IndexedDB kopyası yeniden yüklenirdi.
 // Bağlı yedek dosyasına dokunmaz (queueFile çağrılmaz).
@@ -133,9 +137,7 @@ function saveTheme(t) {
 function saveBackupStamp(ts) {
   lsSet(BACKUP_KEY, String(ts));
 }
-let EQ = null,
-  lastPath = null,
-  fh = null,
+let fh = null,
   fileTimer = null;
 const hasFS = typeof window.showSaveFilePicker === "function";
 function backupJson() {
@@ -218,7 +220,7 @@ async function linkFile() {
     const ok = await writeFile();
     toast(ok ? "Dosyaya bağlandı" : "Dosyaya yazılamadı", ok ? "" : "err");
   } catch (e) {}
-  render();
+  Core.emit("data:changed");
 }
 async function resumeFile() {
   if (!fh) return;
@@ -231,14 +233,14 @@ async function resumeFile() {
     await writeFile();
     toast("Otomatik kaydetme açık");
   }
-  render();
+  Core.emit("data:changed");
 }
 async function unlinkFile() {
   fh = null;
   state.file = "none";
   state.fileName = "";
   await kvSet("fh", null);
-  render();
+  Core.emit("data:changed");
 }
 
 const state = {
@@ -362,7 +364,7 @@ function restoreJson(raw, silent) {
   state.trades = (raw.trades || []).map(normTrade).filter(Boolean);
   if (raw.tags) state.tags = normTags(raw.tags);
   markBackup();
-  render();
+  Core.emit("data:changed");
   return state.trades.length;
 }
 function jsonmerge(raw) {

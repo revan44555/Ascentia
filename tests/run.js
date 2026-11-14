@@ -7,10 +7,12 @@ const vm = require("vm"),
   path = require("path");
 const DIR = path.resolve(process.argv[2] || path.join(__dirname, ".."));
 const FILES = [
+  "core",
   "utils",
   "calc",
   "storage",
   "symbols",
+  "services",
   "ui",
   "view-home",
   "view-add",
@@ -150,9 +152,7 @@ function load(store) {
     vm.runInContext(src, ctx, { filename: f + ".js" });
   }
   const names = [
-    "ACTIONS",
-    "CLICK_ATTRS",
-    "CLICK_SELECTOR",
+    "Core",
     "num",
     "pnl",
     "risk",
@@ -743,17 +743,21 @@ test("6", "Yalnız tarih (2026.10.01) olan satır 00:00 ile kabul edilir", () =>
 });
 
 // ===== F) Düzeltme regresyonları ===============================================
-test("F1", "Enter tuşu: tek keydown handler (odak geçişi + son alanda kaydetme çakışmaz)", () => {
-  const src = fs.readFileSync(path.join(DIR, "js", "app.js"), "utf8");
-  const n = (src.match(/addEventListener\("keydown"/g) || []).length;
-  expect(n === 1, "keydown handler sayısı = " + n + " (1 olmalı)");
-  expect(
-    !/all\[i\+1\]\)?\.focus\(\);else e\.target\.blur\(\)\}return\}\s*\n?.*addEventListener\("keydown"/s.test(
-      src
-    ),
-    "çift handler kalıntısı var"
-  );
-});
+test(
+  "F1",
+  "Enter tuşu: tek keydown dinleyicisi (odak geçişi + son alanda kaydetme çakışmaz)",
+  () => {
+    // keydown yalnızca app.js'teki tek dinleyici üzerinden gelir; ekranlar Core.listen ile kaydolur
+    const direct = fs
+      .readdirSync(path.join(DIR, "js"))
+      .filter(f =>
+        /addEventListener\("keydown"/.test(fs.readFileSync(path.join(DIR, "js", f), "utf8"))
+      );
+    expect(!direct.length, "doğrudan keydown dinleyicisi olan dosya: " + direct.join(", "));
+    const app = fs.readFileSync(path.join(DIR, "js", "app.js"), "utf8");
+    expect(/\["input", "change", "keydown"\]/.test(app), "app.js keydown'u Core'a yönlendirmiyor");
+  }
+);
 test("F2", "JSON geri yükleme hesap limitlerini korur (dl/md/cur kaybolmaz)", () => {
   const { T } = load();
   T.restoreJson(
@@ -1177,11 +1181,11 @@ test(
       .map(f => fs.readFileSync(path.join(DIR, "js", f + ".js"), "utf8"))
       .join("\n");
     const acts = [...new Set([...src.matchAll(/data-act="(\w+)"/g)].map(m => m[1]))];
-    const missing = acts.filter(a => typeof T.ACTIONS[a] !== "function");
+    const missing = acts.filter(a => typeof T.Core.actions[a] !== "function");
     expect(!missing.length, "işleyicisi olmayan data-act: " + missing.join(", "));
     const attrs = ["tip", "qd", "qx", "itab", "facc", "rng", "lchip", "qcemo", "chip", "sym"];
     const used = attrs.filter(a => new RegExp("data-" + a + "=").test(src));
-    const unbound = used.filter(a => !T.CLICK_SELECTOR.includes("[data-" + a + "]"));
+    const unbound = used.filter(a => !T.Core.clickSelector().includes("[data-" + a + "]"));
     expect(!unbound.length, "tıklama seçicisinde olmayan öznitelik: " + unbound.join(", "));
   }
 );
@@ -1232,6 +1236,108 @@ test(
     );
   }
 );
+
+// ===== G) Mimari kuralları (bkz. docs/ARCHITECTURE.md) ===========================
+const jsFiles = () => fs.readdirSync(path.join(DIR, "js")).filter(f => f.endsWith(".js"));
+const jsSrc = f => fs.readFileSync(path.join(DIR, "js", f), "utf8");
+test("G1", "Yalnızca app.js render() çağırır; ekranlar ve depolama olay yayar", () => {
+  const bad = jsFiles().filter(f => f !== "app.js" && /(^|[^.\w])render\(\)/m.test(jsSrc(f)));
+  expect(!bad.length, "render()'ı doğrudan çağıran dosya: " + bad.join(", "));
+});
+test("G2", "Depolama ve hesap katmanı ekranlara/DOM şablonlarına bağlı değil", () => {
+  for (const f of ["storage.js", "calc.js", "symbols.js", "utils.js"]) {
+    const bad = jsSrc(f).match(/\b(view[A-Z]\w*|Core\.(route|nav|action|click|listen))\b/g);
+    expect(!bad, f + " ekran katmanına erişiyor: " + (bad || []).join(", "));
+  }
+});
+test(
+  "G3",
+  "Ekran dosyaları birbirinin değişkenine dokunmaz (görünüm durumu kendi dosyasında)",
+  () => {
+    // her ekran durumunun tek sahibi var; başka dosyada atama yapılamaz
+    const owners = {
+      form: "view-add.js",
+      moreOpen: "view-add.js",
+      tagDraft: "view-add.js",
+      INS_TAB: "view-insights.js",
+      calOff: "view-insights.js",
+      EQ: "view-insights.js",
+      qcEmo: "view-home.js",
+      qcNote: "view-home.js",
+      INSTALL_PROMPT: "view-more.js",
+    };
+    const bad = [];
+    for (const f of jsFiles())
+      for (const [name, owner] of Object.entries(owners))
+        if (
+          f !== owner &&
+          new RegExp("(^|[^.\\w])" + name + "\\s*(=[^=]|\\+\\+|--)", "m").test(jsSrc(f))
+        )
+          bad.push(f + " → " + name);
+    expect(!bad.length, "başka dosyanın durumuna yazıyor: " + bad.join(", "));
+  }
+);
+test("G4", "index.html'deki her betik service worker önbelleğinde (çevrimdışı açılış)", () => {
+  const html = fs.readFileSync(path.join(DIR, "index.html"), "utf8");
+  const sw = fs.readFileSync(path.join(DIR, "sw.js"), "utf8");
+  const scripts = [...html.matchAll(/<script src="(js\/[^"]+)"/g)].map(m => m[1]);
+  const missing = scripts.filter(s => !sw.includes('"./' + s + '"'));
+  expect(!missing.length, "sw.js ASSETS'te olmayan betik: " + missing.join(", "));
+  const unlisted = jsFiles().filter(f => !html.includes('src="js/' + f + '"'));
+  expect(!unlisted.length, "index.html'de yüklenmeyen js dosyası: " + unlisted.join(", "));
+});
+test("G5", "Core: yinelenen yol/eylem kaydı hata verir, bilinmeyen yol bulunamaz", () => {
+  const { T } = load();
+  let e1 = "",
+    e2 = "";
+  try {
+    T.Core.route("/more", { view: () => "" });
+  } catch (e) {
+    e1 = e.message;
+  }
+  try {
+    T.Core.action("save", () => {});
+  } catch (e) {
+    e2 = e.message;
+  }
+  expect(/iki kez/.test(e1) && /iki kez/.test(e2), "yinelenen kayıt reddedilmedi");
+  expect(T.Core.resolve("/yok/boyle") === null, "bilinmeyen yol eşleşti");
+  expect(T.Core.resolve("/trades/a%20b").args.id === "a b", "yol parametresi çözülmedi");
+});
+test(
+  "G6",
+  "Yeni özellik tek dosyayla eklenir: yol + menü + eylem + olay, başka dosyaya dokunmadan",
+  () => {
+    const { T, ctx } = load();
+    vm.runInContext(
+      `Core.route("/demo", { nav: "/demo", view: () => "<p>demo</p>" });
+     Core.nav({ path: "/demo", label: "Demo", order: 99, side: "", bottom: "" });
+     globalThis.__got = [];
+     Core.action("demo-go", () => __got.push("act"));
+     Core.on("demo:evt", d => __got.push(d));`,
+      ctx
+    );
+    expect(T.Core.resolve("/demo").def.view() === "<p>demo</p>", "yol çalışmadı");
+    expect(/href="#\/demo"/.test(T.Core.navHtml("side")), "menüye eklenmedi");
+    T.Core.actions["demo-go"]();
+    T.Core.emit("demo:evt", "x");
+    expect(ctx.__got.join() === "act,x", "eylem/olay çalışmadı: " + ctx.__got.join());
+  }
+);
+test("G7", "Core: bir olay işleyicisinin hatası diğerlerini durdurmaz", () => {
+  const { T, ctx } = load();
+  vm.runInContext(
+    `globalThis.__n = 0;
+     Core.on("t", () => { throw new Error("bozuk"); });
+     Core.on("t", () => { __n++; });`,
+    ctx
+  );
+  const log = console.error;
+  console.error = () => {};
+  T.Core.emit("t");
+  console.error = log;
+  expect(ctx.__n === 1, "ikinci işleyici çalışmadı");
+});
 
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {

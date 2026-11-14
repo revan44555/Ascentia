@@ -131,3 +131,82 @@ function quickEvalCard() {
 <textarea class="inp" rows="2" id="qcNote" placeholder="Bir cümleyle o anı anlat (isteğe bağlı)" aria-label="Anı notu">${esc(qcNote)}</textarea>
 <button type="button" class="btn lg primary" data-act="qcsave" data-id="${esc(t.id)}">Kaydet</button></div>`;
 }
+
+/* ---- Bu ekranın durumu ve etkileşimleri ---- */
+let qcEmo = "",
+  qcNote = "";
+/** İşlemler listesindeki filtre düğmesi (data-lchip="alan:değer"): aynı düğmeye tekrar basınca kalkar. */
+function onListChip(el) {
+  const [key, value] = el.dataset.lchip.split(":");
+  listState[key] = listState[key] === value ? "" : value;
+  const list = $("#tradeList");
+  if (list) list.innerHTML = tradesListHtml();
+  document.querySelectorAll("[data-lchip]").forEach(chip => {
+    const [k, v] = chip.dataset.lchip.split(":");
+    chip.classList.toggle("on", listState[k] === v);
+    chip.setAttribute("aria-pressed", listState[k] === v);
+  });
+}
+/** "Anı değerlendir" kartı: duygu + not kaydet. */
+function saveQuickEval(el) {
+  const trade = state.trades.find(x => x.id === el.dataset.id);
+  if (!trade) return;
+  if (qcEmo) trade.emo = qcEmo;
+  const note = ((document.getElementById("qcNote") || {}).value || "").trim();
+  if (note) trade.notes = trade.notes ? trade.notes + "\n" + note : note;
+  trade.qc = 1;
+  qcEmo = "";
+  qcNote = "";
+  saveTrades(state.trades);
+  toast("Değerlendirme kaydedildi");
+  Core.refresh();
+}
+
+Core.nav({
+  path: "/",
+  label: "Bugün",
+  order: 10,
+  side: `<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7.5-6.5a2 2 0 0 1 2.582 0l7.5 6.5a2 2 0 0 1 .709 1.528v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
+  bottom: `<path d="M4 11l8-7 8 7v9H4z"/>`,
+});
+Core.nav({
+  path: "/trades",
+  label: "İşlemler",
+  order: 20,
+  side: `<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M21 9H3"/><path d="M21 15H3"/>`,
+  bottom: `<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".8"/><circle cx="4.5" cy="12" r=".8"/><circle cx="4.5" cy="18" r=".8"/>`,
+});
+Core.route("/", { view: viewHome });
+Core.route("/trades", { nav: "/trades", view: viewTrades });
+Core.click("lchip", { run: onListChip });
+Core.click("qcemo", {
+  run: el => {
+    qcEmo = qcEmo === el.dataset.qcemo ? "" : el.dataset.qcemo;
+    Core.refresh();
+  },
+});
+Core.action("qcsave", saveQuickEval);
+Core.action("hidepl", () => {
+  try {
+    localStorage.setItem("tj_hidepl", localStorage.getItem("tj_hidepl") === "1" ? "0" : "1");
+  } catch (e) {}
+  Core.refresh();
+});
+Core.action("more", () => {
+  listState.limit += 30;
+  const list = $("#tradeList");
+  if (list) list.innerHTML = tradesListHtml();
+});
+Core.listen("input", e => {
+  const t = e.target;
+  if (t.id === "qcNote") {
+    qcNote = t.value;
+    return true;
+  }
+  if (t.dataset.lq !== undefined) {
+    listState.q = t.value;
+    const tl = $("#tradeList");
+    if (tl) tl.innerHTML = tradesListHtml();
+    return true;
+  }
+});
