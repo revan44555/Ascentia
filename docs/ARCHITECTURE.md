@@ -43,6 +43,8 @@ Core.route("/risk", { nav: "/risk", view: ctx => "<section>…</section>", enter
 Core.nav({ path: "/risk", label: "Risk", order: 25, side: "<path …/>", bottom: "<path …/>" });
 //   side/bottom: svg iç etiketleri (24×24, çizgi). order: sıralama (Bugün 10 … Daha 50). cls: "add" → vurgulu düğme
 Core.action("risk-hesapla", el => { … Core.refresh(); });         // <button data-act="risk-hesapla">
+Core.slot("home.cards", ctx => "<div class=card>…</div>", { order: 50 }); // bir ekrandaki yuvaya kart bağla
+Core.fill("home.cards", ctx); // (yalnız ekran dosyası) yuvayı açar, bağlı kartların HTML'ini birleştirir
 Core.click("riskchip", { when: el => …, run: el => … });          // <button data-riskchip="x">  (sıra önemli)
 Core.listen("input" | "change" | "keydown", e => { … return true; }); // true → olay işlendi, sonrakilere gitmez
 Core.on("saved:trades", trades => { … });  Core.emit("benim:olay", veri);
@@ -99,11 +101,35 @@ Güvenceler: aynı yol/eylem iki kez kaydedilirse **hata** verir; bir olay işle
 
 `app.js`, diğer ekranlar ve `storage.js` **değişmez**. Menü, yol, tıklama ve `sw.js` kontrolü otomatik çalışır.
 
-## Tarif: bir ekrana kart eklemek
+## Slotlar: mevcut ekrana kart eklemek
 
-Şimdilik her ekranın HTML'i kendi dosyasındadır; başka ekranın içine kart koymak o ekran dosyasında tek satır ekler
-(ör. `view-home.js` içinde `${riskCard()}`) ve kartın fonksiyonu yeni dosyada durur. İleride "slot" (kancalı yerleşim noktaları)
-gerekirse `Core.slot("home.top", fn)` şeklinde eklenebilir; bu, ekran dosyalarına bir kez `${Core.slot("home.top")}` yazmayı gerektirir.
+Ekran dosyaları adlandırılmış **yuvalar** açar (`${Core.fill("home.cards", ctx)}`); özellik dosyası o yuvaya kendini bağlar.
+Ekran dosyasına dokunulmaz, dosya silinirse kart kaybolur, hatalı bir slot yalnız kendini kaybeder.
+
+| Yuva             | Ekran / yer                                            | ctx                                   |
+| ---------------- | ------------------------------------------------------ | ------------------------------------- |
+| `home.cards`     | Bugün — P&L kartından sonra, kartlar arası             | `{ trades, todayTrades, weekTrades }` |
+| `home.bottom`    | Bugün — sayfanın sonu                                  | `{ trades }`                          |
+| `trade.cards`    | İşlem ayrıntısı — "Hesap" kartından sonra              | `{ trade }`                           |
+| `add.top`        | Ekle/Düzenle — kontrol listesinden sonra, formdan önce | `{ form }`                            |
+| `insights.cards` | Analiz — seçili bölümün altı (her sekmede)             | `{ tab, trades }`                     |
+| `more.list`      | Daha — Hesaplar/Etiketler/Veri kartının altı           | —                                     |
+
+```js
+"use strict";
+(() => {
+  Core.slot(
+    "trade.cards",
+    ({ trade }) =>
+      `<div class="card"><p class="lbl">Risk notu</p><p>${esc(trade.symbol)} için…</p></div>`,
+    { order: 50 } // küçük olan önce; varsayılan 100
+  );
+})();
+```
+
+Kurallar: slot yalnızca HTML (string) döner; tıklamalar yine `data-act` + `Core.action` ile bağlanır; ctx'i değiştirme.
+Yeni yuva gerekiyorsa ekran dosyasına tek satır `${Core.fill("ad.yeri", { … })}` eklenir ve **bu tabloya** yazılır (G9, listelenmemiş yuvada kırılır;
+hiçbir ekranda açılmamış bir adı slot'a bağlamak da — yazım hatası — testte kırılır).
 
 ## Tarif: yeni veri alanı
 
@@ -145,5 +171,4 @@ Yeni bir yazma işlemi gerekirse (ör. "işleme etiket ata") aynı kalıp: `serv
 
 - **Okuma:** ekranlar `state.trades` gibi alanları hâlâ doğrudan okur. Bu güvenlidir ama alan adı değişirse her ekran etkilenir; gerekirse `getTrades()` gibi okuma işlevleri eklenir.
 - **Tek global kapsam:** dosyalar klasik betik; ES modüllerine geçiş `import` ile bağımlılığı görünür kılar (testlerdeki sahte DOM sandbox'ının uyarlanması gerekir).
-- **Slot sistemi:** başka ekrana kart eklemek için `Core.slot("home.top", fn)`; ekran dosyalarına bir kez `${Core.slot("home.top")}` yazmayı gerektirir.
 - **Veri şeması sürümü** (`schema: 2`): yeni alan sayısı arttığında eklenmeli.

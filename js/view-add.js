@@ -195,6 +195,7 @@ function viewAdd() {
 <header class="page-h"><p class="eyebrow">Kayıt</p><h1>${existing ? "İşlemi düzenle" : "Yeni işlem"}</h1></header>
 ${limitBanner()}
 ${checklistCard()}
+${Core.fill("add.top", { form })}
 <div class="stack4 addgrid">
 <div class="card s3" style="padding:16px">
 <div><label class="fld"><span>Tarih / saat</span><input class="inp" data-f="date" type="datetime-local" value="${esc(form.date)}"></label><p class="ferr" id="fe-date" role="alert"></p>

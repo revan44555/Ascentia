@@ -390,6 +390,7 @@ ${kpi("Ort. R", s.avgR == null ? (s.closed ? "Stop yok" : "—") : formatR(s.avg
 <div class="ins-filters">${accChips()}${rangeChips()}</div>
 ${insTabs()}
 ${body}
+${Core.fill("insights.cards", { tab: INS_TAB, trades })}
 </div>`;
 }
 

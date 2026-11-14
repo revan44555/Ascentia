@@ -18,6 +18,7 @@ const Core = (() => {
     clicks = [],
     listeners = { input: [], change: [], keydown: [] },
     navItems = [],
+    slots = Object.create(null),
     bus = Object.create(null);
 
   /* ---- olaylar: ekranlar ve depolama arasındaki tek haberleşme yolu ---- */
@@ -109,6 +110,32 @@ const Core = (() => {
     }
   }
 
+  /* ---- slotlar: bir ekrandaki adlandırılmış boş yuvalar ---- */
+  /**
+   * Ekran dosyası yuvayı BİR KEZ açar:      ${Core.fill("home.cards", { trades })}
+   * Özellik dosyası yuvaya kendini bağlar:  Core.slot("home.cards", ctx => "<div class=card>…</div>")
+   * fn, ekranın verdiği ctx ile çağrılır ve HTML döner. order küçük olan önce gelir (varsayılan 100).
+   * Hatalı bir slot yalnız kendini kaybeder, ekran çizilmeye devam eder.
+   */
+  function slot(name, fn, opts) {
+    const list = slots[name] || (slots[name] = []);
+    list.push({ fn, order: (opts && opts.order) ?? 100, n: list.length });
+    list.sort((a, b) => a.order - b.order || a.n - b.n);
+  }
+  function fill(name, ctx) {
+    return (slots[name] || [])
+      .map(s => {
+        try {
+          const html = s.fn(ctx);
+          return html == null ? "" : String(html);
+        } catch (e) {
+          console.error("[Core] '" + name + "' slotu hata verdi:", e);
+          return "";
+        }
+      })
+      .join("");
+  }
+
   /* ---- menü ---- */
   /** { path, label, order, side, bottom, cls? } — side/bottom: svg içeriği (iç etiketler). */
   function nav(item) {
@@ -141,6 +168,8 @@ const Core = (() => {
     dispatch,
     nav,
     navHtml,
+    slot,
+    fill,
     actions,
     clicks,
   };

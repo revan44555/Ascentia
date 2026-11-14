@@ -48,6 +48,7 @@ function viewMore() {
   return `<div class="stack">${pageHead("Daha")}
 <div class="card bkc"><div><div class="bkt"><span class="dot ${bs.c}"></span>${bs.t}</div><div class="subtle bks">${bs.s}</div></div><button type="button" class="btn sm primary" data-act="jsonexport">Yedekle</button></div>
 <div class="card lgrp">${row("#/more/accounts", "Hesaplar", state.accounts.length + " hesap")}${row("#/more/tags", "Etiketler", nt + " etiket")}${row("#/more/data", "Veri ve yedek", "")}</div>
+${Core.fill("more.list")}
 ${INSTALL_PROMPT ? `<div class="card lgrp"><div class="lrow"><span>Uygulama</span><button type="button" class="btn sm primary" data-act="install">Ana ekrana yükle</button></div></div>` : ""}
 <div class="card lgrp"><div class="lrow"><span>Görünüm</span><span class="sg"><button type="button" class="${state.theme === "dark" ? "on" : ""}" data-act="theme" data-v="dark">Koyu</button><button type="button" class="${state.theme === "light" ? "on" : ""}" data-act="theme" data-v="light">Açık</button></span></div></div>
 <p class="subtle foot">${state.trades.length} işlem · veriler yalnızca bu cihazda</p></div>`;
@@ -170,6 +171,7 @@ ${row("Hesap", esc(a ? a.name : "—"))}
 ${row("Güncel bakiye", '<span class="mono">' + esc(money(a ? currentBalance(a) : null)) + "</span>")}
 ${row("Equity (bu işleme kadar)", '<span class="mono">' + esc(money(eqAfter)) + "</span>")}
 </div></div>
+${Core.fill("trade.cards", { trade: t })}
 ${longNote || needFix ? `<div class="card"><p class="lbl">Notlar</p>${longNote ? `<p class="warn" style="margin-top:4px;font-size:14px">${longNote}</p>` : ""}${needFix ? `<p class="warn" style="margin-top:4px;font-size:14px">${si[0]} için kontrat çarpanı girilmemiş (şu an 1).${si[2] === "Forex" ? " Forex çarpanı genelde 100.000." : ""} Düzenle → Gelişmiş'ten gir.</p>` : ""}</div>` : ""}
 <div class="actrow"><a class="btn md secondary" href="#/add?id=${encodeURIComponent(t.id)}">Düzenle</a><button type="button" class="btn md secondary" data-act="clone" data-id="${esc(t.id)}">Kopyala</button><button type="button" class="btn md danger" data-act="deltrade" data-id="${esc(t.id)}">Sil</button></div>
 </div>`;

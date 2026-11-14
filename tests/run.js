@@ -153,6 +153,11 @@ function load(store) {
   }
   const names = [
     "Core",
+    "viewHome",
+    "viewAdd",
+    "viewInsights",
+    "viewMore",
+    "viewTradeDetail",
     "upsertTrade",
     "removeTrade",
     "reinsertTrade",
@@ -1477,6 +1482,69 @@ test(
     expect(!bad.length, "ekran veriyi yazıyor (services.js işlevi kullan): " + bad.join("; "));
   }
 );
+
+// ===== I) Slotlar (Core.slot / Core.fill) ========================================
+test("I1", "Slot: sıraya göre birleşir, ctx iletilir, hatalı slot ekranı bozmaz", () => {
+  const { T, ctx } = load();
+  vm.runInContext(
+    `Core.slot("t.x", c => "C" + c.n, { order: 200 });
+     Core.slot("t.x", c => "A" + c.n, { order: 10 });
+     Core.slot("t.x", () => { throw new Error("bozuk"); });
+     Core.slot("t.x", () => null);
+     Core.slot("t.x", () => "B");`,
+    ctx
+  );
+  const log = console.error;
+  console.error = () => {};
+  const out = T.Core.fill("t.x", { n: 7 });
+  console.error = log;
+  expect(out === "A7BC7", "beklenen A7BC7, gelen " + out);
+  expect(T.Core.fill("yok.slot") === "", "kayıtsız yuva boş dönmedi");
+});
+test("I2", "Slot: Bugün, İşlem detayı, Analiz, Ekle ve Daha ekranlarında yuvalar çalışır", () => {
+  const { T, ctx } = load();
+  withAcc(T);
+  T.state.trades = [base, { ...base, id: "2", exit: 1.09 }];
+  vm.runInContext("form = emptyForm();", ctx);
+  const got = {};
+  for (const n of [
+    "home.cards",
+    "home.bottom",
+    "trade.cards",
+    "add.top",
+    "insights.cards",
+    "more.list",
+  ])
+    vm.runInContext(
+      `Core.slot(${JSON.stringify(n)}, c => "<i data-s='${n}'>" + JSON.stringify(Object.keys(c || {})) + "</i>")`,
+      ctx
+    );
+  const html = {
+    "home.cards": T.viewHome(),
+    "home.bottom": T.viewHome(),
+    "trade.cards": T.viewTradeDetail(T.state.trades[0].id),
+    "add.top": T.viewAdd(),
+    "insights.cards": T.viewInsights(),
+    "more.list": T.viewMore(),
+  };
+  for (const [name, h] of Object.entries(html)) got[name] = h.includes(`data-s='${name}'`);
+  const missing = Object.keys(got).filter(k => !got[k]);
+  expect(!missing.length, "yuvası çizilmeyen ekran noktası: " + missing.join(", "));
+  expect(html["trade.cards"].includes('["trade"]'), "trade.cards ctx.trade iletmedi");
+});
+test("G9", "Her Core.slot adı bir ekranda Core.fill ile açılmış ve rehberde listelenmiş", () => {
+  const src = jsFiles()
+    .filter(f => f !== "core.js")
+    .map(jsSrc)
+    .join("\n");
+  const opened = new Set([...src.matchAll(/Core\.fill\("([\w.]+)"/g)].map(m => m[1]));
+  const used = [...src.matchAll(/Core\.slot\("([\w.]+)"/g)].map(m => m[1]);
+  const typo = used.filter(n => !opened.has(n));
+  expect(!typo.length, "hiçbir ekranda açılmayan slot (yazım hatası?): " + typo.join(", "));
+  const doc = fs.readFileSync(path.join(DIR, "docs", "ARCHITECTURE.md"), "utf8");
+  const undocumented = [...opened].filter(n => !doc.includes("`" + n + "`"));
+  expect(!undocumented.length, "rehberde olmayan yuva: " + undocumented.join(", "));
+});
 
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {

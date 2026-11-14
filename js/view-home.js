@@ -62,6 +62,7 @@ ${leak ? `<div class="rowline"><span>En büyük sızıntı</span><span>${esc(lea
 </div></div>
 ${quickEvalCard()}${propCard()}
 ${reviewCard()}
+${Core.fill("home.cards", { trades, todayTrades, weekTrades })}
 ${opens.length ? `<div class="gap2"><h2 class="h2t">Açık pozisyonlar (${opens.length})</h2>${opens.map(tradeCard).join("")}</div>` : ""}
 <div class="sechead">
 <h2 class="h2t">Son işlemler</h2>
@@ -69,6 +70,7 @@ ${opens.length ? `<div class="gap2"><h2 class="h2t">Açık pozisyonlar (${opens.
 </div>
 <div class="gap2">${recent.map(tradeCard).join("")}</div>
 ${state.file === "need" ? `<div class="card"><p style="font-weight:500">Otomatik kaydetme duraklatıldı</p><p class="muted" style="margin-top:4px;font-size:15px">${esc(state.fileName)} dosyasına yazmak için izin ver.</p><button type="button" class="btn lg secondary" style="margin-top:12px" data-act="fileresume">Devam et</button></div>` : ""}
+${Core.fill("home.bottom", { trades })}
 
 </div>`;
 }
