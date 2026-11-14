@@ -149,15 +149,10 @@ function onListChip(el) {
 }
 /** "Anı değerlendir" kartı: duygu + not kaydet. */
 function saveQuickEval(el) {
-  const trade = state.trades.find(x => x.id === el.dataset.id);
-  if (!trade) return;
-  if (qcEmo) trade.emo = qcEmo;
   const note = ((document.getElementById("qcNote") || {}).value || "").trim();
-  if (note) trade.notes = trade.notes ? trade.notes + "\n" + note : note;
-  trade.qc = 1;
+  if (!evaluateTrade(el.dataset.id, qcEmo, note)) return;
   qcEmo = "";
   qcNote = "";
-  saveTrades(state.trades);
   toast("Değerlendirme kaydedildi");
   Core.refresh();
 }

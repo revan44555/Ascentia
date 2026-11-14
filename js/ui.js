@@ -152,7 +152,7 @@ function typedConfirm(m) {
 Core.click("tip", { when: el => !el.dataset.act, run: el => toast(el.getAttribute("data-tip")) });
 Core.click("facc", {
   run: el => {
-    state.filterAccountId = el.dataset.facc;
+    setAccountFilter(el.dataset.facc);
     Core.refresh();
   },
 });
@@ -162,3 +162,10 @@ Core.click("rng", {
     Core.refresh();
   },
 });
+
+/** Etiket ekleme sonucunu kullanıcıya yansıtır (hem form hem Etiketler sayfası kullanır). */
+function addTagFeedback(kind, value) {
+  const result = addTag(kind, value);
+  if (result === "exists") toast("Bu etiket zaten var");
+  else if (result === "ok") Core.refresh();
+}

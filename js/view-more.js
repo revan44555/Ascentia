@@ -176,8 +176,7 @@ ${longNote || needFix ? `<div class="card"><p class="lbl">Notlar</p>${longNote ?
 }
 
 /* ---- Ayarlar, hesaplar, etiketler, veri ve işlem ayrıntısı ---- */
-let accTimer = null,
-  INSTALL_PROMPT = null;
+let INSTALL_PROMPT = null;
 window.addEventListener("beforeinstallprompt", e => {
   e.preventDefault();
   INSTALL_PROMPT = e;
@@ -206,32 +205,19 @@ function addAccount() {
     toast("Hesap adı gir");
     return;
   }
-  state.accounts.push({
-    id: "a" + Date.now().toString(36),
-    name,
-    balance: 0,
-    dl: 0,
-    md: 0,
-    cur: "",
-  });
-  saveAccounts(state.accounts);
+  createAccount(name);
   Core.refresh();
 }
 
 function deleteAccount(el) {
   const id = el.dataset.id;
-  if (state.accounts.length <= 1) {
-    toast("Son hesap silinemez", "err");
-    return;
-  }
-  if (state.trades.some(t => accountId(t) === id)) {
-    toast("Bu hesapta işlem var", "err");
+  const blocker = accountDeleteBlocker(id);
+  if (blocker) {
+    toast(blocker === "last" ? "Son hesap silinemez" : "Bu hesapta işlem var", "err");
     return;
   }
   if (!typedConfirm("Hesap silinsin mi?")) return;
-  state.accounts = state.accounts.filter(a => a.id !== id);
-  if (state.filterAccountId === id) state.filterAccountId = "all";
-  saveAccounts(state.accounts);
+  removeAccount(id);
   Core.refresh();
 }
 /** İşlemi siler; 6 sn boyunca "Geri al" sunar. */
@@ -241,15 +227,12 @@ function deleteTrade(el) {
   if (!typedConfirm("İşlem silinsin mi? (" + trade.symbol + " " + formatWhen(trade.date) + ")")) {
     return;
   }
-  const index = state.trades.indexOf(trade);
-  state.trades.splice(index, 1);
-  saveTrades(state.trades);
+  const removed = removeTrade(trade.id);
   location.hash = "#/trades";
   toast("Silindi", null, 6000, {
     label: "Geri al",
     fn: () => {
-      state.trades.splice(index, 0, trade);
-      saveTrades(state.trades);
+      reinsertTrade(removed.trade, removed.index);
       Core.refresh();
     },
   });
@@ -257,25 +240,7 @@ function deleteTrade(el) {
 /** Tüm verileri siler (localStorage + IndexedDB). Tema ve bağlı dosya adı korunur. */
 function resetAllData() {
   if (!typedConfirm("TÜM veriler silinsin mi?")) return;
-  const theme = state.theme,
-    fileName = state.fileName;
-  try {
-    localStorage.clear();
-  } catch (e) {}
-  wipeStores();
-  saveTheme(theme);
-  Object.assign(state, {
-    trades: [],
-    accounts: [{ id: "a1", name: "Ana hesap", balance: 0, dl: 0, md: 0, cur: "" }],
-    tags: JSON.parse(JSON.stringify(DEFAULT_TAGS)),
-    filterAccountId: "all",
-    lastBackupAt: null,
-    memoryOnly: false,
-    file: "none",
-    fileName,
-    theme,
-  });
-  saveBackupStamp("");
+  resetAllStores();
   location.hash = "#/";
   Core.refresh();
 }
@@ -302,27 +267,14 @@ function closeTrade(el) {
     Core.refresh();
     return;
   }
-  trade.exit = price;
-  trade.exitDate = nowLocal() < trade.date ? trade.date : nowLocal();
-  saveTrades(state.trades);
+  closeTradeAt(trade.id, price);
   Core.refresh();
 }
 
 function onAccountInput(t) {
-  // hesap alanları her tuşta IndexedDB'ye yazmaz — 400 ms debounce
   if (t.dataset.aid === undefined) return;
-  const [f, id] = t.dataset.aid.split(":");
-  const a = state.accounts.find(x => x.id === id);
-  if (!a) return;
-  a[f] =
-    f === "name"
-      ? (t.value || "").toString().slice(0, 32)
-      : f === "cur"
-        ? (t.value || "").toUpperCase().slice(0, 3)
-        : num(t.value) || 0;
-  if (f === "cur" && a.cur) state.prefsCur = a.cur;
-  clearTimeout(accTimer);
-  accTimer = setTimeout(() => saveAccounts(state.accounts), 400);
+  const [field, id] = t.dataset.aid.split(":");
+  updateAccountField(id, field, t.value);
 }
 
 function importCsvFile(file) {
@@ -330,8 +282,7 @@ function importCsvFile(file) {
     .text()
     .then(txt => {
       const st = importCsv(txt);
-      state.trades = st.trades;
-      saveTrades(state.trades);
+      replaceTrades(st.trades);
       if (st.added) {
         toast(
           st.added +
@@ -365,13 +316,8 @@ function importJsonFile(file, merge) {
         if (r) Core.refresh();
         return;
       }
-      const n = restoreJson(raw, !state.trades.length);
-      if (n != null) {
-        saveTrades(state.trades);
-        saveAccounts(state.accounts);
-        saveTags(state.tags);
-        toast(n + " işlem geri yüklendi");
-      }
+      const n = restoreBackup(raw);
+      if (n != null) toast(n + " işlem geri yüklendi");
       Core.refresh();
     })
     .catch(() => toast("Dosya okunamadı", "err"));
@@ -396,8 +342,7 @@ Core.action("install", () => {
   Core.refresh();
 });
 Core.action("theme", el => {
-  state.theme = el.dataset.v;
-  saveTheme(state.theme);
+  setTheme(el.dataset.v);
   document.documentElement.classList.add("tx");
   applyTheme();
   setTimeout(() => document.documentElement.classList.remove("tx"), 400);
@@ -425,12 +370,11 @@ Core.action("addacc", addAccount);
 Core.action("delacc", deleteAccount);
 Core.action("addtag", el => {
   const input = document.querySelector('[data-newtag="' + el.dataset.kind + '"]');
-  addTag(el.dataset.kind, input ? input.value : "");
+  addTagFeedback(el.dataset.kind, input ? input.value : "");
 });
 Core.action("deltag", el => {
   const { kind, v } = el.dataset; // şablon: data-kind="setups|emos|mists|syms" data-v="etiket"
-  state.tags[kind] = state.tags[kind].filter(x => x !== v);
-  saveTags(state.tags);
+  removeTag(kind, v);
   Core.refresh();
 });
 Core.action("deltrade", deleteTrade);

@@ -352,32 +352,3 @@ function validate(o) {
       : "Short işlemde hedef girişin altında olmalı.";
   return null;
 }
-
-// kısmi kapatma çekirdeği — UI (closeTrade miktar alanı) ve testler için tek doğruluk kaynağı.
-// Başarı null döner; hata durumunda doğrulama mesajı (string) döner.
-function applyPartial(id, q, p, when) {
-  const t = state.trades.find(x => x.id === id);
-  if (!t || t.exit != null) return "İşlem zaten kapalı.";
-  if (q == null || q <= 0) return "Miktar 0'dan büyük olmalı.";
-  if (q >= t.qty) return "Tam kapanış için Miktar alanını boş bırak.";
-  if (p == null || p <= 0) return "Çıkış fiyatı 0'dan büyük olmalı.";
-  const now = when || nowLocal(),
-    ch = {
-      ...t,
-      id: newId(),
-      grp: t.grp || t.id,
-      rt: null,
-      chk: null,
-      qty: q,
-      exit: p,
-      fees: 0,
-      exitDate: now < t.date ? t.date : now,
-    },
-    ve = validate(ch);
-  if (ve) return ve;
-  t.grp = ch.grp;
-  t.qty = Math.round((t.qty - q) * 1e8) / 1e8;
-  state.trades.push(ch);
-  saveTrades(state.trades);
-  return null;
-}

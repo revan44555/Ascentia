@@ -153,6 +153,18 @@ function load(store) {
   }
   const names = [
     "Core",
+    "upsertTrade",
+    "removeTrade",
+    "reinsertTrade",
+    "closeTradeAt",
+    "evaluateTrade",
+    "createAccount",
+    "accountDeleteBlocker",
+    "removeAccount",
+    "updateAccountField",
+    "addTag",
+    "removeTag",
+    "resetAllStores",
     "num",
     "pnl",
     "risk",
@@ -1338,6 +1350,133 @@ test("G7", "Core: bir olay işleyicisinin hatası diğerlerini durdurmaz", () =>
   console.error = log;
   expect(ctx.__n === 1, "ikinci işleyici çalışmadı");
 });
+
+// ===== H) Veri yazma servisleri (services.js) ====================================
+const mkTrade = (id, o) => ({
+  id,
+  date: "2026-10-01T10:00",
+  symbol: "EURUSD",
+  dir: "LONG",
+  entry: 1.1,
+  exit: null,
+  qty: 1,
+  mult: 100000,
+  acc: "a1",
+  fees: 0,
+  fx: 1,
+  ...o,
+});
+test(
+  "H1",
+  "upsertTrade: yeni ekler (true), aynı id'yi değiştirir (false); saved:trades yayılır",
+  () => {
+    const { T, ctx } = load();
+    withAcc(T);
+    vm.runInContext('globalThis.__ev = 0; Core.on("saved:trades", () => __ev++);', ctx);
+    expect(T.upsertTrade(mkTrade("A")) === true, "yeni işlem true dönmedi");
+    expect(T.upsertTrade(mkTrade("A", { qty: 2 })) === false, "güncelleme false dönmedi");
+    expect(T.state.trades.length === 1 && T.state.trades[0].qty === 2, "değişmedi");
+    expect(ctx.__ev === 2, "saved:trades olayı " + ctx.__ev);
+  }
+);
+test("H2", "removeTrade + reinsertTrade: silinen işlem aynı sıraya geri döner", () => {
+  const { T } = load();
+  withAcc(T);
+  ["A", "B", "C"].forEach(id => T.upsertTrade(mkTrade(id)));
+  const r = T.removeTrade("B");
+  expect(r && r.index === 1 && T.state.trades.map(t => t.id).join() === "A,C", "silinmedi");
+  T.reinsertTrade(r.trade, r.index);
+  expect(T.state.trades.map(t => t.id).join() === "A,B,C", "sıra bozuldu");
+  expect(T.removeTrade("yok") === null, "olmayan işlem null dönmedi");
+});
+test("H3", "closeTradeAt yalnız açık işlemi kapatır; evaluateTrade not ekler ve qc=1 yapar", () => {
+  const { T } = load();
+  withAcc(T);
+  T.upsertTrade(mkTrade("A", { notes: "ilk" }));
+  expect(T.closeTradeAt("A", 1.2) === true && T.state.trades[0].exit === 1.2, "kapanmadı");
+  expect(
+    T.closeTradeAt("A", 1.3) === false && T.state.trades[0].exit === 1.2,
+    "kapalı işlem değişti"
+  );
+  expect(T.evaluateTrade("A", "FOMO", "ikinci") === true, "değerlendirme kaydedilmedi");
+  const t = T.state.trades[0];
+  expect(t.emo === "FOMO" && t.notes === "ilk\nikinci" && t.qc === 1, JSON.stringify(t));
+  expect(T.evaluateTrade("yok", "x", "y") === false, "olmayan işlem true döndü");
+});
+test("H4", "Hesap: son hesap ve işlemli hesap silinemez; silinen hesap filtresini sıfırlar", () => {
+  const { T } = load();
+  withAcc(T);
+  expect(T.accountDeleteBlocker("a1") === "last", "son hesap engellenmedi");
+  const b = T.createAccount("İkinci");
+  T.upsertTrade(mkTrade("A", { acc: b.id }));
+  expect(T.accountDeleteBlocker(b.id) === "hasTrades", "işlemli hesap engellenmedi");
+  T.removeTrade("A");
+  T.state.filterAccountId = b.id;
+  expect(T.accountDeleteBlocker(b.id) === null, "boş hesap engellendi");
+  T.removeAccount(b.id);
+  expect(T.state.accounts.length === 1 && T.state.filterAccountId === "all", "filtre sıfırlanmadı");
+});
+test(
+  "H5",
+  "updateAccountField: alan biçimlenir, para birimi prefsCur olur, kayıt 400 ms gecikir",
+  async () => {
+    const { T, store } = load();
+    withAcc(T);
+    T.updateAccountField("a1", "cur", "eurx");
+    T.updateAccountField("a1", "balance", "1500");
+    const a = T.state.accounts[0];
+    expect(a.cur === "EUR" && a.balance === 1500 && T.state.prefsCur === "EUR", JSON.stringify(a));
+    expect(!store.log.includes("tj_acc_v1"), "kayıt hemen yazıldı (gecikmeliydi)");
+    await sleep(600);
+    expect(store.log.includes("tj_acc_v1"), "gecikmeli kayıt yazılmadı");
+  }
+);
+test(
+  "H6",
+  "Etiket: addTag ok/empty/exists döner (büyük-küçük harf duyarsız); removeTag siler",
+  () => {
+    const { T } = load();
+    expect(T.addTag("setups", "  Yeni Kurulum ") === "ok", "eklenmedi");
+    expect(T.addTag("setups", "yeni kurulum") === "exists", "yineleme kabul edildi");
+    expect(T.addTag("setups", "   ") === "empty", "boş kabul edildi");
+    T.removeTag("setups", "Yeni Kurulum");
+    expect(!T.state.tags.setups.includes("Yeni Kurulum"), "silinmedi");
+  }
+);
+test("H7", "resetAllStores: veriler sıfırlanır, tema ve bağlı dosya adı korunur", () => {
+  const { T } = load();
+  withAcc(T);
+  T.upsertTrade(mkTrade("A"));
+  T.state.theme = "light";
+  T.state.fileName = "defter.json";
+  T.resetAllStores();
+  expect(T.state.trades.length === 0 && T.state.accounts.length === 1, "sıfırlanmadı");
+  expect(
+    T.state.theme === "light" && T.state.fileName === "defter.json",
+    "tema/dosya adı kayboldu"
+  );
+});
+test(
+  "G8",
+  "Ekranlar ve ui.js veriyi yazmaz: state ataması ve save*() yalnız services/storage'ta",
+  () => {
+    const views = jsFiles().filter(f => /^view-/.test(f) || f === "ui.js");
+    const rules = [
+      [/\bstate\.[\w.]+(\[[^\]]*\])?\s*(=[^=]|\+=|-=)/, "state ataması"],
+      [/\bstate\.[\w.]+\.(push|splice|unshift|pop|sort|reverse)\(/, "state dizisini değiştirme"],
+      [/Object\.assign\(state/, "Object.assign(state"],
+      [
+        /\b(saveTrades|saveAccounts|saveTags|saveTheme|saveBackupStamp)\(/,
+        "doğrudan kayıt çağrısı",
+      ],
+      [/\btrade\.\w+\s*=[^=]/, "kayıtlı işlem nesnesini değiştirme"],
+    ];
+    const bad = [];
+    for (const f of views)
+      for (const [re, what] of rules) if (re.test(jsSrc(f))) bad.push(f + " → " + what);
+    expect(!bad.length, "ekran veriyi yazıyor (services.js işlevi kullan): " + bad.join("; "));
+  }
+);
 
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {

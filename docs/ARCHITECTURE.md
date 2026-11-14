@@ -15,24 +15,25 @@ Bunu birkaç kural ve küçük bir çekirdek (`js/core.js`) sağlar; kuralları 
                      (yol · eylem · olay · menü)     (depolama: ekranı bilmez)
 ```
 
-| Dosya                               | Sorumluluk                                                                      | Bilmediği şey                  |
-| ----------------------------------- | ------------------------------------------------------------------------------- | ------------------------------ |
-| `core.js`                           | Kayıt defteri: yol, menü, eylem, tıklama, olay                                  | Hiçbir ekranı                  |
-| `utils.js`, `calc.js`, `symbols.js` | Biçimlendirme, P&L/R/istatistik, sembol verisi                                  | DOM, `state`, ekranlar         |
-| `storage.js`                        | localStorage + IndexedDB, yedek, içe aktarma; `state` nesnesi                   | Ekranlar (yalnızca olay yayar) |
-| `services.js`                       | Birden çok ekranın kullandığı işler (CSV üretimi, etiket ekleme, dosya indirme) | Ekranlar                       |
-| `ui.js`                             | Ortak küçük bileşenler (kpi, rozet, toast, tarih aralığı chip'leri)             | Ekranlar                       |
-| `view-*.js`                         | Bir ekranın HTML'i + yolu + eylemleri + **kendi durumu**                        | Başka ekranın durumu           |
-| `app.js`                            | Açılış, `render()`, olayları `Core`'a yönlendiren tek dinleyici                 | Özelliklerin içi               |
+| Dosya                               | Sorumluluk                                                                                             | Bilmediği şey                  |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| `core.js`                           | Kayıt defteri: yol, menü, eylem, tıklama, olay                                                         | Hiçbir ekranı                  |
+| `utils.js`, `calc.js`, `symbols.js` | Biçimlendirme, P&L/R/istatistik, sembol verisi                                                         | DOM, `state`, ekranlar         |
+| `storage.js`                        | localStorage + IndexedDB, yedek, içe aktarma; `state` nesnesi                                          | Ekranlar (yalnızca olay yayar) |
+| `services.js`                       | **Tüm veri yazma işlemleri** (işlem, hesap, etiket, tema, sıfırlama, yedek geri yükleme) + CSV/indirme | Ekranlar                       |
+| `ui.js`                             | Ortak küçük bileşenler (kpi, rozet, toast, tarih aralığı chip'leri)                                    | Ekranlar                       |
+| `view-*.js`                         | Bir ekranın HTML'i + yolu + eylemleri + **kendi durumu**                                               | Başka ekranın durumu           |
+| `app.js`                            | Açılış, `render()`, olayları `Core`'a yönlendiren tek dinleyici                                        | Özelliklerin içi               |
 
-## Altı kural
+## Yedi kural
 
 1. **Ekran kendini kaydeder.** `Core.route / nav / action / click / listen` ile. `app.js`, `index.html` menüsü, `ACTIONS` tablosu gibi merkezi bir yer yoktur.
 2. **Yalnızca `app.js` `render()` çağırır.** Ekranlar `Core.refresh()`, depolama `Core.emit("data:changed")` der. (G1)
 3. **Her ekran durumunun tek sahibi vardır.** `form`, `INS_TAB`, `qcEmo` gibi değişkenler yalnız kendi dosyasında atanır; başka ekran ihtiyaç duyarsa olay veya `services.js` kullanır. (G3)
-4. **Saf katmanlar ekranı bilmez.** `calc.js`, `utils.js`, `symbols.js`, `storage.js` içinde `view…` ya da `Core.route/nav/action` geçmez. (G2)
-5. **Yeni dosya IIFE içinde yazılır** (`(() => { … })();`). Tüm klasik betikler tek global kapsamı paylaşır; aynı üst düzey ad iki dosyada tanımlanırsa sayfa açılmaz (`npm run lint` bunu da yakalar).
-6. **Her betik üç yerde listelenir:** `index.html`, `sw.js` `ASSETS` (+ `CACHE` sürümünü artır), `tests/run.js` `FILES`. Unutulursa G4 kırılır.
+4. **Ekranlar veriyi yazmaz.** `state.…` ataması, `state` dizisine `push/splice`, işlem nesnesini değiştirme ve `saveTrades()` gibi çağrılar `view-*.js` ve `ui.js` içinde yasaktır; `services.js` işlevi kullanılır. Servisler DOM'a dokunmaz, toast göstermez, ekranı çizdirmez: sonucu döndürür, ne gösterileceğine ekran karar verir. (G8)
+5. **Saf katmanlar ekranı bilmez.** `calc.js`, `utils.js`, `symbols.js`, `storage.js` içinde `view…` ya da `Core.route/nav/action` geçmez. (G2)
+6. **Yeni dosya IIFE içinde yazılır** (`(() => { … })();`). Tüm klasik betikler tek global kapsamı paylaşır; aynı üst düzey ad iki dosyada tanımlanırsa sayfa açılmaz (`npm run lint` bunu da yakalar).
+7. **Her betik üç yerde listelenir:** `index.html`, `sw.js` `ASSETS` (+ `CACHE` sürümünü artır), `tests/run.js` `FILES`. Unutulursa G4 kırılır.
 
 ## Core API
 
@@ -111,8 +112,38 @@ gerekirse `Core.slot("home.top", fn)` şeklinde eklenebilir; bu, ekran dosyalar�
 - Yeni bir kalıcı ayar için `localStorage` anahtarı `tj_` önekiyle açılır; işlem verisi gibi korunması gereken şey `state` + `storage.js` üzerinden gider.
 - Verinin değişimini izleyen özellikler `Core.on("saved:trades", …)` kullanır; `storage.js`'e dokunulmaz.
 
-## Bu çekirdekle henüz çözülmeyenler (sonraki adımlar)
+## Veri yazma servisleri
 
-- **Ortak `state`:** ekranlar hâlâ `state.trades` gibi alanları doğrudan okuyup yazar. Sıradaki adım, yazmaların `services.js` işlevlerinden (ör. `addTrade`, `removeTrade`) geçmesi.
+Bir ekranın veriyi değiştirmesi gerektiğinde `services.js`'teki işlev çağrılır, sonucu ekran yorumlar:
+
+```js
+// view-more.js — hesap silme
+const blocker = accountDeleteBlocker(id); // "last" | "hasTrades" | null
+if (blocker) {
+  toast(blocker === "last" ? "Son hesap silinemez" : "Bu hesapta işlem var", "err");
+  return;
+}
+if (!typedConfirm("Hesap silinsin mi?")) return; // onay: ekranın işi
+removeAccount(id); // yazma: servisin işi (+ saved:accounts olayı)
+Core.refresh(); // çizim: ekranın işi
+```
+
+| İşlev                                                                                                  | Ne yapar                                 |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `upsertTrade(rec)`                                                                                     | Ekler/değiştirir; yeni mi (`true`) döner |
+| `removeTrade(id)` / `reinsertTrade(t, i)`                                                              | Siler ({trade, index} döner) / geri alır |
+| `closeTradeAt(id, price)` · `applyPartial(id, q, p)`                                                   | Tam / kısmi kapatma                      |
+| `evaluateTrade(id, emo, note)`                                                                         | "Anı değerlendir"                        |
+| `replaceTrades(list)` · `restoreBackup(raw)`                                                           | CSV/JSON içe aktarma sonrası kaydetme    |
+| `createAccount` · `accountDeleteBlocker` · `removeAccount` · `updateAccountField` · `setAccountFilter` | Hesaplar                                 |
+| `addTag` ("ok"/"empty"/"exists") · `removeTag` · `addSymbolTag`                                        | Etiketler                                |
+| `setTheme` · `resetAllStores`                                                                          | Ayar / sıfırlama                         |
+
+Yeni bir yazma işlemi gerekirse (ör. "işleme etiket ata") aynı kalıp: `services.js`'e işlev + `tests/run.js`'e H-testi.
+
+## Bu yapıyla henüz çözülmeyenler (sonraki adımlar)
+
+- **Okuma:** ekranlar `state.trades` gibi alanları hâlâ doğrudan okur. Bu güvenlidir ama alan adı değişirse her ekran etkilenir; gerekirse `getTrades()` gibi okuma işlevleri eklenir.
 - **Tek global kapsam:** dosyalar klasik betik; ES modüllerine geçiş `import` ile bağımlılığı görünür kılar (testlerdeki sahte DOM sandbox'ının uyarlanması gerekir).
-- **Slot sistemi** (yukarıda) ve **veri şeması sürümü** (`schema: 2`) yeni alan sayısı arttığında eklenmeli.
+- **Slot sistemi:** başka ekrana kart eklemek için `Core.slot("home.top", fn)`; ekran dosyalarına bir kez `${Core.slot("home.top")}` yazmayı gerektirir.
+- **Veri şeması sürümü** (`schema: 2`): yeni alan sayısı arttığında eklenmeli.

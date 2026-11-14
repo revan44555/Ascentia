@@ -353,10 +353,7 @@ function saveForm() {
   try {
     localStorage.removeItem("tj_draft");
   } catch (e) {}
-  const i = state.trades.findIndex(t => t.id === rec.id);
-  if (i >= 0) state.trades[i] = rec;
-  else state.trades.push(rec);
-  saveTrades(state.trades);
+  const isNew = upsertTrade(rec);
   LASTLOT[sym] = rec.qty;
   try {
     localStorage.setItem("tj_lastlot_v1", JSON.stringify(LASTLOT));
@@ -364,7 +361,7 @@ function saveForm() {
   const justAdded = rec.id;
   form = null;
   location.replace("#/trades/" + encodeURIComponent(justAdded));
-  if (i < 0) toast("Kaydedildi");
+  if (isNew) toast("Kaydedildi");
 }
 /** Hızlı giriş zamanı: "N dakika önce". */
 function onQuickEntryTime(el) {
@@ -408,10 +405,7 @@ function addCustomSymbol() {
     toast("En az 2 karakter");
     return;
   }
-  if (!state.tags.syms.includes(raw)) {
-    state.tags.syms.push(raw);
-    saveTags(state.tags);
-  }
+  addSymbolTag(raw);
   applySym(raw);
   Core.refresh();
 }
@@ -605,7 +599,7 @@ Core.listen("keydown", e => {
     const v = e.target.value,
       kind = tagDraft.kind;
     tagDraft = null;
-    addTag(kind, v);
+    addTagFeedback(kind, v);
     return true;
   }
 });
