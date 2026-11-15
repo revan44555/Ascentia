@@ -134,7 +134,7 @@ function viewTradeDetail(id) {
     t.qty * (t.mult || 1) >= 1e4
       ? "Kontrat çarpanı eksik olabilir (ör. forex 100.000). Kontrol et."
       : "";
-  const d = decimalPlaces(t.entry),
+  const d = priceDecimals(t),
     closeCard =
       t.exit == null
         ? `<div class="card s3"><p class="sect-h">Pozisyonu kapat</p>

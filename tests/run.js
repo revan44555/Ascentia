@@ -1682,6 +1682,19 @@ test(
   }
 );
 
+test(
+  "K1",
+  "İşlem detayında fiyatlar tüm fiyat alanlarının en uzun ondalığıyla gösterilir (giriş 1.1, çıkış 1.0782)",
+  () => {
+    const { T } = load();
+    withAcc(T);
+    T.state.trades = [{ ...base, id: "Z", entry: 1.1, exit: 1.0782, stop: 1.09 }];
+    const h = T.viewTradeDetail("Z");
+    expect(h.includes("1,0782"), "çıkış fiyatı 1,0782 olarak görünmedi");
+    expect(h.includes("1,1000"), "giriş fiyatı aynı ondalıkla (1,1000) görünmedi");
+  }
+);
+
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {
   console.log("Repo: " + DIR + "\n");
