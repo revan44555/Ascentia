@@ -85,19 +85,7 @@ const ok = (n, c, d) => {
   );
   await page.goto(base);
   await page.waitForSelector("#view .card");
-  // 1) Anı değerlendir: duygu düğmesi + kaydet
-  await page.click('[data-qcemo="FOMO"]');
-  ok(
-    "qc duygu düğmesi seçilir (aria-pressed)",
-    (await page.locator('[data-qcemo="FOMO"]').getAttribute("aria-pressed")) === "true"
-  );
-  await page.click('[data-act="qcsave"]');
-  await page.waitForTimeout(200);
-  ok(
-    "qc kaydedildi (emo=FOMO, qc=1, kart kalktı)",
-    (await page.evaluate(() => state.trades[0].emo === "FOMO" && state.trades[0].qc === 1)) &&
-      (await page.locator("text=Anı değerlendir").count()) === 0
-  );
+  ok("Anı değerlendir kartı yok", (await page.locator("text=Anı değerlendir").count()) === 0);
   // 2) Ekle formu: yön, ayrıntılar, chip aç/kapa, hızlı zaman
   await page.goto(base + "#/add");
   await page.waitForSelector('[data-f="symbol"]');

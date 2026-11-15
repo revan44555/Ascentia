@@ -162,7 +162,6 @@ function load(store) {
     "removeTrade",
     "reinsertTrade",
     "closeTradeAt",
-    "evaluateTrade",
     "createAccount",
     "accountDeleteBlocker",
     "removeAccount",
@@ -975,19 +974,6 @@ test("PWA", "sw.js sözdizimi geçerli, install/fetch handlerları var", () => {
   new vm.Script(s);
   expect(/install/.test(s) && /fetch/.test(s) && /caches\.open/.test(s), "handler eksik");
 });
-test("QC", "son kapanan işlem için anı kartı çıkar; qc=1 olunca kalkar", () => {
-  const { T, ctx } = load();
-  withAcc(T);
-  const n = new Date();
-  n.setMinutes(n.getMinutes() - n.getTimezoneOffset());
-  const iso = n.toISOString().slice(0, 16);
-  T.state.trades = [{ ...base, id: "Q1", date: iso, exitDate: iso }];
-  let h = vm.runInContext("viewHome()", ctx);
-  expect(/Anı değerlendir/.test(h) && /data-act="qcsave"/.test(h), "kart yok");
-  T.state.trades[0].qc = 1;
-  h = vm.runInContext("viewHome()", ctx);
-  expect(!/Anı değerlendir/.test(h), "kart hâlâ var");
-});
 test("IMG", "görsel dataURL kaydedilir, normTrade ve yedekten korunur", () => {
   const { T, ctx } = load();
   withAcc(T);
@@ -1046,14 +1032,14 @@ test(
     );
   }
 );
-test("F23", "Anı değerlendir kartı qc=0 olan yeni kaydedilmiş işlemde de çıkar", () => {
+test("F23", "Ana sayfada 'Anı değerlendir' kartı artık yok (yeni kapanan işlemde bile)", () => {
   const { T, ctx } = load();
   withAcc(T);
   const n = new Date();
   n.setMinutes(n.getMinutes() - n.getTimezoneOffset());
   const iso = n.toISOString().slice(0, 16);
   T.state.trades = [{ ...base, id: "Q2", date: iso, exitDate: iso, qc: 0 }];
-  expect(/Anı değerlendir/.test(vm.runInContext("viewHome()", ctx)), "kart çıkmadı");
+  expect(!/Anı değerlendir/.test(vm.runInContext("viewHome()", ctx)), "kart hâlâ çıkıyor");
 });
 test(
   "F24",
@@ -1202,21 +1188,10 @@ test(
     const acts = [...new Set([...src.matchAll(/data-act="(\w+)"/g)].map(m => m[1]))];
     const missing = acts.filter(a => typeof T.Core.actions[a] !== "function");
     expect(!missing.length, "işleyicisi olmayan data-act: " + missing.join(", "));
-    const attrs = ["tip", "qd", "qx", "itab", "facc", "rng", "lchip", "qcemo", "chip", "sym"];
+    const attrs = ["tip", "qd", "qx", "itab", "facc", "rng", "lchip", "chip", "sym"];
     const used = attrs.filter(a => new RegExp("data-" + a + "=").test(src));
     const unbound = used.filter(a => !T.Core.clickSelector().includes("[data-" + a + "]"));
     expect(!unbound.length, "tıklama seçicisinde olmayan öznitelik: " + unbound.join(", "));
-  }
-);
-test(
-  "F32",
-  "Duygu düğmesi (data-qcemo) tıklaması seçimi değiştirir (eskiden hiç çalışmıyordu)",
-  () => {
-    const { ctx, env } = load();
-    click(env, { qcemo: "FOMO" });
-    expect(vm.runInContext("qcEmo", ctx) === "FOMO", "qcEmo=" + vm.runInContext("qcEmo", ctx));
-    click(env, { qcemo: "FOMO" });
-    expect(vm.runInContext("qcEmo", ctx) === "", "aynı düğmeye tekrar basınca kalkmalı");
   }
 );
 test("F32", "Yönlendirme: data-act, aralık filtresi ve formsuz chip güvenle çalışır", () => {
@@ -1290,8 +1265,6 @@ test(
       INS_TAB: "view-insights.js",
       calOff: "view-insights.js",
       EQ: "view-insights.js",
-      qcEmo: "view-home.js",
-      qcNote: "view-home.js",
       INSTALL_PROMPT: "view-more.js",
     };
     const bad = [];
@@ -1413,7 +1386,7 @@ test("H2", "removeTrade + reinsertTrade: silinen işlem aynı sıraya geri döne
   expect(T.state.trades.map(t => t.id).join() === "A,B,C", "sıra bozuldu");
   expect(T.removeTrade("yok") === null, "olmayan işlem null dönmedi");
 });
-test("H3", "closeTradeAt yalnız açık işlemi kapatır; evaluateTrade not ekler ve qc=1 yapar", () => {
+test("H3", "closeTradeAt yalnız açık işlemi kapatır", () => {
   const { T } = load();
   withAcc(T);
   T.upsertTrade(mkTrade("A", { notes: "ilk" }));
@@ -1422,10 +1395,6 @@ test("H3", "closeTradeAt yalnız açık işlemi kapatır; evaluateTrade not ekle
     T.closeTradeAt("A", 1.3) === false && T.state.trades[0].exit === 1.2,
     "kapalı işlem değişti"
   );
-  expect(T.evaluateTrade("A", "FOMO", "ikinci") === true, "değerlendirme kaydedilmedi");
-  const t = T.state.trades[0];
-  expect(t.emo === "FOMO" && t.notes === "ilk\nikinci" && t.qc === 1, JSON.stringify(t));
-  expect(T.evaluateTrade("yok", "x", "y") === false, "olmayan işlem true döndü");
 });
 test("H4", "Hesap: son hesap ve işlemli hesap silinemez; silinen hesap filtresini sıfırlar", () => {
   const { T } = load();

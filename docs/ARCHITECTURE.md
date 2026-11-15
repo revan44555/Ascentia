@@ -29,7 +29,7 @@ Bunu birkaç kural ve küçük bir çekirdek (`js/core.js`) sağlar; kuralları 
 
 1. **Ekran kendini kaydeder.** `Core.route / nav / action / click / listen` ile. `app.js`, `index.html` menüsü, `ACTIONS` tablosu gibi merkezi bir yer yoktur.
 2. **Yalnızca `app.js` `render()` çağırır.** Ekranlar `Core.refresh()`, depolama `Core.emit("data:changed")` der. (G1)
-3. **Her ekran durumunun tek sahibi vardır.** `form`, `INS_TAB`, `qcEmo` gibi değişkenler yalnız kendi dosyasında atanır; başka ekran ihtiyaç duyarsa olay veya `services.js` kullanır. (G3)
+3. **Her ekran durumunun tek sahibi vardır.** `form`, `INS_TAB`, `EQ` gibi değişkenler yalnız kendi dosyasında atanır; başka ekran ihtiyaç duyarsa olay veya `services.js` kullanır. (G3)
 4. **Ekranlar veriyi yazmaz.** `state.…` ataması, `state` dizisine `push/splice`, işlem nesnesini değiştirme ve `saveTrades()` gibi çağrılar `view-*.js` ve `ui.js` içinde yasaktır; `services.js` işlevi kullanılır. Servisler DOM'a dokunmaz, toast göstermez, ekranı çizdirmez: sonucu döndürür, ne gösterileceğine ekran karar verir. (G8)
 5. **Saf katmanlar ekranı bilmez.** `calc.js`, `utils.js`, `symbols.js`, `storage.js` içinde `view…` ya da `Core.route/nav/action` geçmez. (G2)
 6. **Yeni dosya IIFE içinde yazılır** (`(() => { … })();`). Tüm klasik betikler tek global kapsamı paylaşır; aynı üst düzey ad iki dosyada tanımlanırsa sayfa açılmaz (`npm run lint` bunu da yakalar).
@@ -170,7 +170,6 @@ Core.refresh(); // çizim: ekranın işi
 | `upsertTrade(rec)`                                                                                     | Ekler/değiştirir; yeni mi (`true`) döner |
 | `removeTrade(id)` / `reinsertTrade(t, i)`                                                              | Siler ({trade, index} döner) / geri alır |
 | `closeTradeAt(id, price)` · `applyPartial(id, q, p)`                                                   | Tam / kısmi kapatma                      |
-| `evaluateTrade(id, emo, note)`                                                                         | "Anı değerlendir"                        |
 | `replaceTrades(list)` · `restoreBackup(raw)`                                                           | CSV/JSON içe aktarma sonrası kaydetme    |
 | `createAccount` · `accountDeleteBlocker` · `removeAccount` · `updateAccountField` · `setAccountFilter` | Hesaplar                                 |
 | `addTag` ("ok"/"empty"/"exists") · `removeTag` · `addSymbolTag`                                        | Etiketler                                |

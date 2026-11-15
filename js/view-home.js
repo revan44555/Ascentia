@@ -60,7 +60,6 @@ ${state.memoryOnly ? `<div class="card" style="font-size:15px;color:var(--muted)
 ${best && best.net > 0 ? `<div class="rowline"><span>En iyi setup</span><span>${esc(best.key)} <span class="mono ${pnlClass(best.net)}">${money(best.net)}</span></span></div>` : ""}
 ${leak ? `<div class="rowline"><span>En büyük sızıntı</span><span>${esc(leak.key)} <span class="mono dn">${money(leak.net)}</span></span></div>` : ""}
 </div></div>
-${quickEvalCard()}
 ${Core.fill("home.cards", { trades, todayTrades, weekTrades })}
 ${opens.length ? `<div class="gap2"><h2 class="h2t">Açık pozisyonlar (${opens.length})</h2>${opens.map(tradeCard).join("")}</div>` : ""}
 <div class="sechead">
@@ -118,22 +117,7 @@ function viewTrades() {
 </div>`;
 }
 // son 72 saatte kapanan, değerlendirilmemiş işlem için hızlı duygu+not kartı
-function quickEvalCard() {
-  const cut = new Date(Date.now() - 72 * 36e5);
-  const t = filterAccount(state.trades, state.filterAccountId)
-    .filter(x => x.exit != null && !x.qc && new Date(closedAt(x)) > cut)
-    .sort((a, b) => closedAt(b).localeCompare(closedAt(a)))[0];
-  if (!t) return "";
-  return `<div class="card s3"><p class="sect-h">Anı değerlendir</p>
-<p class="subtle" style="font-size:14px">${esc(t.symbol)} işlemi kapanalı birkaç saat oldu — o sırada ne hissettin?</p>
-<div class="chips scroll">${state.tags.emos.map(x => `<button type="button" aria-pressed="${qcEmo === x}" class="chip ${qcEmo === x ? "on" : "off"}" data-qcemo="${esc(x)}">${esc(x)}</button>`).join("")}</div>
-<textarea class="inp" rows="2" id="qcNote" placeholder="Bir cümleyle o anı anlat (isteğe bağlı)" aria-label="Anı notu">${esc(qcNote)}</textarea>
-<button type="button" class="btn lg primary" data-act="qcsave" data-id="${esc(t.id)}">Kaydet</button></div>`;
-}
-
 /* ---- Bu ekranın durumu ve etkileşimleri ---- */
-let qcEmo = "",
-  qcNote = "";
 /** İşlemler listesindeki filtre düğmesi (data-lchip="alan:değer"): aynı düğmeye tekrar basınca kalkar. */
 function onListChip(el) {
   const [key, value] = el.dataset.lchip.split(":");
@@ -146,16 +130,6 @@ function onListChip(el) {
     chip.setAttribute("aria-pressed", listState[k] === v);
   });
 }
-/** "Anı değerlendir" kartı: duygu + not kaydet. */
-function saveQuickEval(el) {
-  const note = ((document.getElementById("qcNote") || {}).value || "").trim();
-  if (!evaluateTrade(el.dataset.id, qcEmo, note)) return;
-  qcEmo = "";
-  qcNote = "";
-  toast("Değerlendirme kaydedildi");
-  Core.refresh();
-}
-
 Core.nav({
   path: "/",
   label: "Bugün",
@@ -173,13 +147,6 @@ Core.nav({
 Core.route("/", { view: viewHome });
 Core.route("/trades", { nav: "/trades", view: viewTrades });
 Core.click("lchip", { run: onListChip });
-Core.click("qcemo", {
-  run: el => {
-    qcEmo = qcEmo === el.dataset.qcemo ? "" : el.dataset.qcemo;
-    Core.refresh();
-  },
-});
-Core.action("qcsave", saveQuickEval);
 Core.action("hidepl", () => {
   try {
     localStorage.setItem("tj_hidepl", localStorage.getItem("tj_hidepl") === "1" ? "0" : "1");
@@ -195,10 +162,6 @@ Core.listen(
   "input",
   e => {
     const t = e.target;
-    if (t.id === "qcNote") {
-      qcNote = t.value;
-      return true;
-    }
     if (t.dataset.lq !== undefined) {
       listState.q = t.value;
       const tl = $("#tradeList");
@@ -206,5 +169,5 @@ Core.listen(
       return true;
     }
   },
-  { when: e => e.target.id === "qcNote" || e.target.dataset.lq !== undefined }
+  { when: e => e.target.dataset.lq !== undefined }
 );

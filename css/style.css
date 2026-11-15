@@ -2564,21 +2564,43 @@ nav.bottom {
 .home-page-h .brand-caption {
   display: none;
 }
+.home-page-h .brand-lockup {
+  gap: 8px;
+}
 .home-page-h .brand-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
 }
 .home-page-h .brand-mark svg {
-  width: 21px;
-  height: 21px;
+  width: 17px;
+  height: 17px;
 }
 .home-page-h .brand-name {
-  font-size: 18px;
+  font-size: 16px;
+}
+.home-tools {
+  gap: 6px;
 }
 .home-settings {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  margin: 0;
+  border-radius: 11px;
+  line-height: 0;
+  text-decoration: none;
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+}
+.home-settings svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.home-view {
+  gap: 14px;
 }
 @media (min-width: 1024px) {
   .home-page-h {
@@ -2588,4 +2610,28 @@ nav.bottom {
   .home-page-h .brand-lockup {
     display: none;
   }
+}
+
+/* Kompakt "Gerçekleşmiş P&L" kartı — içerik aynı, yalnız boşluklar küçüldü */
+.hero {
+  padding: 14px 16px !important;
+  border-radius: 22px !important;
+}
+.hero .big {
+  font-size: clamp(28px, 8.4vw, 34px) !important;
+  margin: 6px 0 4px !important;
+}
+.hero .divide {
+  margin-top: 6px !important;
+}
+.hero .rowline {
+  min-height: 34px;
+  padding: 6px 0;
+}
+.hero .rowline:last-child {
+  padding-bottom: 0;
+  min-height: 28px;
+}
+.hero:after {
+  top: 14px;
 }

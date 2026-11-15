@@ -151,16 +151,6 @@ function closeTradeAt(id, price) {
   saveTrades(state.trades);
   return true;
 }
-/** "Anı değerlendir": duygu + not ekler, qc=1 yapar. İşlem yoksa false. */
-function evaluateTrade(id, emo, note) {
-  const t = state.trades.find(x => x.id === id);
-  if (!t) return false;
-  if (emo) t.emo = emo;
-  if (note) t.notes = t.notes ? t.notes + "\n" + note : note;
-  t.qc = 1;
-  saveTrades(state.trades);
-  return true;
-}
 /** CSV içe aktarma sonucunu işlem listesi olarak kaydeder. */
 function replaceTrades(trades) {
   state.trades = trades;
