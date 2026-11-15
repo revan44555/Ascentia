@@ -386,7 +386,7 @@ ${kpi("Ort. R", s.avgR == null ? (s.closed ? "Stop yok" : "—") : formatR(s.avg
     body =
       '<p class="muted" style="padding:40px 0;text-align:center">Bu bölüm için etiketli işlem yok. İşlem eklerken Ayrıntılar bölümünden etiket seç.</p>';
   return `<div class="stack">
-<header class="page-h"><p class="eyebrow">Performans</p><h1>Analiz</h1></header>
+<h1 class="vh">Analiz</h1>
 <div class="ins-filters">${accChips()}${rangeChips()}</div>
 ${insTabs()}
 ${body}

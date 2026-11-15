@@ -103,9 +103,7 @@ function tradesListHtml() {
 }
 function viewTrades() {
   return `<div class="stack4">
-<header class="page-h" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
-<div><p class="eyebrow">Defter</p><h1>İşlemler</h1></div>
-</header>
+<h1 class="vh">İşlemler</h1>
 <div class="searchwrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 <input class="inp" aria-label="Ara" placeholder="Sembol, setup, not…" value="${esc(listState.q)}" data-lq="1"></div>
 <details class="filt"${state.filterAccountId !== "all" || RANGE !== "all" || listState.side || listState.result ? " open" : ""}><summary>Filtreler</summary><div class="s3" style="margin-top:8px">${accChips()}${rangeChips()}<div class="chips scroll">

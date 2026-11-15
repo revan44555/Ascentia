@@ -28,7 +28,11 @@ function backupNote() {
     : "Hiç yedek almadın.";
 }
 function pageHead(t, back) {
-  return `<header class="page-h">${back ? `<a class="bk" href="#/more">‹ Daha</a>` : `<p class="eyebrow">Ayarlar</p>`}<h1>${t}</h1></header>`;
+  // ana sekmelerde başlık yalnız ekran okuyucu içindir (alt menü zaten nerede olduğunu gösterir);
+  // alt sayfalarda geri bağlantısı ve başlık tek satırdır
+  return back
+    ? `<header class="page-h sub"><a class="bk" href="#/more">‹ Daha</a><h1>${t}</h1><span></span></header>`
+    : `<h1 class="vh">${t}</h1>`;
 }
 function settingRow(t, d, btn) {
   return `<div class="lrow"><div><div class="lt">${t}</div><div class="subtle ld">${d}</div></div>${btn}</div>`;

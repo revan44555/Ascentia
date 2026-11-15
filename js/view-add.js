@@ -192,7 +192,7 @@ function liveHint() {
 function viewAdd() {
   const existing = form.id ? state.trades.find(t => t.id === form.id) : null;
   return `<div class="stack4">
-<header class="page-h"><p class="eyebrow">Kayıt</p><h1>${existing ? "İşlemi düzenle" : "Yeni işlem"}</h1></header>
+<h1 class="vh">${existing ? "İşlemi düzenle" : "Yeni işlem"}</h1>${existing ? `<p class="edit-note">İşlemi düzenliyorsun · ${esc(existing.symbol)}</p>` : ""}
 ${Core.fill("add.top", { form })}
 <div class="stack4 addgrid">
 <div class="card s3" style="padding:16px">
