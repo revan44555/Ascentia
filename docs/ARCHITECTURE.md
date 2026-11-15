@@ -46,7 +46,8 @@ Core.action("risk-hesapla", el => { … Core.refresh(); });         // <button d
 Core.slot("home.cards", ctx => "<div class=card>…</div>", { order: 50 }); // bir ekrandaki yuvaya kart bağla
 Core.fill("home.cards", ctx); // (yalnız ekran dosyası) yuvayı açar, bağlı kartların HTML'ini birleştirir
 Core.click("riskchip", { when: el => …, run: el => … });          // <button data-riskchip="x">  (sıra önemli)
-Core.listen("input" | "change" | "keydown", e => { … return true; }); // true → olay işlendi, sonrakilere gitmez
+Core.listen("input" | "change" | "keydown", e => { … return true; }, { when: e => e.target.dataset.riskpct !== undefined });
+//   when: işleyici yalnız bu koşulda çağrılır (HER ZAMAN ver); true → olay işlendi, sonrakilere gitmez
 Core.on("saved:trades", trades => { … });  Core.emit("benim:olay", veri);
 Core.refresh();                                                    // ekranı yeniden çiz
 ```
@@ -85,12 +86,15 @@ Güvenceler: aynı yol/eylem iki kez kaydedilirse **hata** verir; bir olay işle
   const icon = `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`;
   Core.nav({ path: "/risk", label: "Risk", order: 25, side: icon, bottom: icon });
   Core.route("/risk", { nav: "/risk", view: viewRisk });
-  Core.listen("input", e => {
-    if (e.target.dataset.riskpct === undefined) return;
-    riskPercent = num(e.target.value) || 0;
-    Core.refresh();
-    return true;
-  });
+  Core.listen(
+    "input",
+    e => {
+      riskPercent = num(e.target.value) || 0;
+      Core.refresh();
+      return true;
+    },
+    { when: e => e.target.dataset.riskpct !== undefined } // yalnız kendi alanın için çalış
+  );
 })();
 ```
 
@@ -127,7 +131,7 @@ Ekran dosyasına dokunulmaz, dosya silinirse kart kaybolur, hatalı bir slot yal
 })();
 ```
 
-Kurallar: slot yalnızca HTML (string) döner; tıklamalar yine `data-act` + `Core.action` ile bağlanır; ctx'i değiştirme.
+Kurallar: slot yalnızca HTML (string) döner ve **kullanıcı verisini kendisi `esc()` ile kaçışlar** (`Core.fill` çıktıyı olduğu gibi basar); tıklamalar yine `data-act` + `Core.action` ile bağlanır; ctx'i değiştirme.
 Yeni yuva gerekiyorsa ekran dosyasına tek satır `${Core.fill("ad.yeri", { … })}` eklenir ve **bu tabloya** yazılır (G9, listelenmemiş yuvada kırılır;
 hiçbir ekranda açılmamış bir adı slot'a bağlamak da — yazım hatası — testte kırılır).
 
@@ -137,6 +141,13 @@ hiçbir ekranda açılmamış bir adı slot'a bağlamak da — yazım hatası �
 - Formda düzenlenecekse `view-add.js` (`emptyForm`, `fromTrade`, `saveForm`) güncellenir.
 - Yeni bir kalıcı ayar için `localStorage` anahtarı `tj_` önekiyle açılır; işlem verisi gibi korunması gereken şey `state` + `storage.js` üzerinden gider.
 - Verinin değişimini izleyen özellikler `Core.on("saved:trades", …)` kullanır; `storage.js`'e dokunulmaz.
+
+> **Giriş olayı tuzağı (J1–J3):** aynı olayı (`input`, `keydown`…) birçok dosya dinler ve dosya yükleme sırasıyla çağrılır.
+> `{ when }` vermeden `true` dönen bir işleyici, kendisini ilgilendirmeyen olayı yutup başka özelliği sessizce bozabilir
+> (bir kez yaşandı: Hesaplar sayfasındaki alanlar kaydedilmedi). Bu yüzden her işleyiciye `when` ver.
+
+> **Kartlar da slotla bağlanır:** Bugün'deki prop limiti/haftalık not ve Ekle'deki limit bannerı/kontrol listesi, `view-insights.js`
+> içinde `home.cards` / `add.top` slotlarına kaydedilir; `view-home.js` ve `view-add.js` Analiz dosyasını bilmez.
 
 ## Veri yazma servisleri
 
@@ -165,10 +176,12 @@ Core.refresh(); // çizim: ekranın işi
 | `addTag` ("ok"/"empty"/"exists") · `removeTag` · `addSymbolTag`                                        | Etiketler                                |
 | `setTheme` · `resetAllStores`                                                                          | Ayar / sıfırlama                         |
 
+Küçük arayüz tercihleri (taslak `tj_draft`, son lot, P&L gizleme, haftalık not, kontrol listesi) ekranın kendi `localStorage` anahtarlarıdır; işlem/hesap/etiket verisi ise yalnız servislerden geçer.
+
 Yeni bir yazma işlemi gerekirse (ör. "işleme etiket ata") aynı kalıp: `services.js`'e işlev + `tests/run.js`'e H-testi.
 
 ## Bu yapıyla henüz çözülmeyenler (sonraki adımlar)
 
 - **Okuma:** ekranlar `state.trades` gibi alanları hâlâ doğrudan okur. Bu güvenlidir ama alan adı değişirse her ekran etkilenir; gerekirse `getTrades()` gibi okuma işlevleri eklenir.
 - **Tek global kapsam:** dosyalar klasik betik; ES modüllerine geçiş `import` ile bağımlılığı görünür kılar (testlerdeki sahte DOM sandbox'ının uyarlanması gerekir).
-- **Veri şeması sürümü** (`schema: 2`): yeni alan sayısı arttığında eklenmeli.
+- **Şema geçişi:** yedekte `schemaVersion: 2` zaten yazılıyor ama `restoreJson` sürüme göre dönüştürme yapmıyor (bilinmeyen alanlar `normTrade` ile elenir). Şema gerçekten değiştiğinde `restoreJson` başına `migrate(raw)` eklenmeli.

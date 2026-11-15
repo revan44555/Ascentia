@@ -160,27 +160,3 @@ function symFind(raw) {
   if (sc[0] && sc[0].l <= 1 && n.length >= 5 && (!sc[1] || sc[1].l > 1)) r.auto = sc[0].x;
   return r;
 }
-function applySym(nm) {
-  form.symbol = nm;
-  if (!form.id && form.qty === "" && LASTLOT[nm]) {
-    form.qty = LASTLOT[nm];
-    const qi = document.querySelector("[data-f=qty]");
-    if (qi) qi.value = form.qty;
-  }
-  const i = SYMS.find(x => x[0] === nm);
-  if (i && !form.id && (form.mult === "" || form.multAuto)) {
-    form.mult = i[1] !== 1 ? String(i[1]) : "";
-    form.multAuto = true;
-  }
-}
-function symHint(strict) {
-  const raw = String(form.symbol || "").trim();
-  if (!raw) return "";
-  const r = symFind(raw),
-    nm = r.exact || r.auto;
-  if (nm) {
-    const i = SYMS.find(x => x[0] === nm);
-    return `<p class="subtle" style="font-size:13px">${nm !== raw.toUpperCase() ? `<span class="up">→ ${esc(nm)}</span> · ` : ""}${i ? esc(i[2] + " · " + i[3]) + (i[2] === "Forex" && !nm.endsWith("USD") ? " · ⚠ P&L " + nm.slice(3, 6) + " cinsinden · kuru ek alanlara gir" : "") : "Özel sembol · çarpan 1 (vadeli ise ek alanlardan gir)"}</p>`;
-  }
-  return `<div class="chips">${r.sug.map(x => `<button type="button" class="chip off" data-sym="${esc(x)}">${esc(x)}</button>`).join("")}</div>${strict ? `<p class="dn" style="font-size:13px;margin-top:6px">"${esc(raw)}" listede yok.${r.sug.length ? " Yukarıdan birini seç ya da" : ""} <button type="button" class="chip off" data-act="addsym" style="height:32px">özel sembol olarak ekle</button></p>` : ""}`;
-}

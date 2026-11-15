@@ -56,7 +56,11 @@ const Core = (() => {
     if (routes.some(r => r.pattern === pattern)) throw new Error("Yol iki kez kayıtlı: " + pattern);
     const keys = [];
     const re = new RegExp(
-      "^" + pattern.replace(/:([a-z]+)/gi, (_, k) => (keys.push(k), "([^/]+)")) + "$"
+      "^" +
+        pattern
+          .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+          .replace(/:([a-z]+)/gi, (_, k) => (keys.push(k), "([^/]+)")) +
+        "$"
     );
     routes.push({ pattern, re, keys, def });
   }
@@ -95,13 +99,18 @@ const Core = (() => {
   }
 
   /* ---- input / change / keydown: işleyici true dönerse olay işlenmiş sayılır ---- */
-  function listen(type, fn) {
-    listeners[type].push(fn);
+  /**
+   * opts.when(e): işleyici yalnız bu koşul sağlanınca çağrılır. Böylece bir dosyanın işleyicisi
+   * kendisini ilgilendirmeyen olayı yutamaz (yükleme sırasından bağımsız çalışır).
+   */
+  function listen(type, fn, opts) {
+    listeners[type].push({ fn, when: opts && opts.when });
   }
   function dispatch(type, e) {
-    for (const fn of listeners[type]) {
+    for (const { fn, when } of listeners[type]) {
       let handled = false;
       try {
+        if (when && !when(e)) continue;
         handled = fn(e);
       } catch (err) {
         console.error("[Core] '" + type + "' işleyicisi hata verdi:", err);

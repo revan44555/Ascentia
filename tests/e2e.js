@@ -156,6 +156,16 @@ const ok = (n, c, d) => {
   await page.click('[data-act="addacc"]');
   await page.waitForTimeout(150);
   ok("hesap eklendi", (await page.evaluate(() => state.accounts.length)) === 2);
+  // hesap alanlarına yazmak gerçekten kaydedilir (eskiden form dinleyicisi giriş olayını yutuyordu)
+  await page.fill('[data-aid^="name:"] >> nth=0', "Ana2");
+  await page.fill('[data-aid^="balance:"] >> nth=0', "777");
+  await page.fill('[data-aid^="cur:"] >> nth=0', "eur");
+  await page.waitForTimeout(600);
+  const acc0 = await page.evaluate(() => JSON.parse(localStorage.getItem("tj_acc_v1"))[0]);
+  ok(
+    "hesap alanları kaydedildi",
+    acc0.name === "Ana2" && acc0.balance === 777 && acc0.cur === "EUR"
+  );
   await page.click('[data-act="delacc"] >> nth=1');
   await page.waitForTimeout(250);
   ok("boş hesap silindi", (await page.evaluate(() => state.accounts.length)) === 1);

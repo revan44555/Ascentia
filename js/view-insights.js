@@ -403,6 +403,11 @@ Core.nav({
   bottom: `<path d="M5 20V11M12 20V4M19 20v-6"/>`,
 });
 Core.route("/insights", { nav: "/insights", view: viewInsights });
+// Prop limiti, kontrol listesi ve haftalık not bu dosyanın kartlarıdır; Bugün/Ekle ekranlarına slotla girerler
+Core.slot("home.cards", propCard, { order: 10 });
+Core.slot("home.cards", reviewCard, { order: 20 });
+Core.slot("add.top", limitBanner, { order: 10 });
+Core.slot("add.top", checklistCard, { order: 20 });
 Core.click("itab", {
   run: el => {
     INS_TAB = el.dataset.itab;

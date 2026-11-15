@@ -44,7 +44,7 @@ function viewMore() {
   const bs = backupStatus(),
     nt = TAGKIND.reduce((n, [k]) => n + state.tags[k].length, 0);
   const row = (h, t, v) =>
-    `<a class="lrow" href="${h}"><span>${t}</span><span class="lv">${v}<i>›</i></span></span></a>`;
+    `<a class="lrow" href="${h}"><span>${t}</span><span class="lv">${v}<i>›</i></span></a>`;
   return `<div class="stack">${pageHead("Daha")}
 <div class="card bkc"><div><div class="bkt"><span class="dot ${bs.c}"></span>${bs.t}</div><div class="subtle bks">${bs.s}</div></div><button type="button" class="btn sm primary" data-act="jsonexport">Yedekle</button></div>
 <div class="card lgrp">${row("#/more/accounts", "Hesaplar", state.accounts.length + " hesap")}${row("#/more/tags", "Etiketler", nt + " etiket")}${row("#/more/data", "Veri ve yedek", "")}</div>
@@ -297,6 +297,7 @@ function importCsvFile(file) {
       } else {
         toast("İçe aktarılamadı: " + (st.why || "satır bulunamadı"), "err");
       }
+      Core.refresh();
     })
     .catch(() => toast("CSV okunamadı", "err"));
 }
@@ -357,9 +358,13 @@ Core.action("csvexport", () => {
   toast("CSV indirildi");
 });
 Core.action("jsonmerge", () => {
-  const input = document.querySelector('[data-file="json"]');
-  if (!input) return;
-  input.dataset.merge = "1";
+  // birleştirme için ayrı, tek kullanımlık dosya seçici: iptal edilirse sonraki "geri yükle"ye bulaşmaz
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = () => {
+    if (input.files[0]) importJsonFile(input.files[0], true);
+  };
   input.click();
 });
 Core.action("linkfile", () => linkFile());
@@ -382,39 +387,59 @@ Core.action("deltag", el => {
 Core.action("deltrade", deleteTrade);
 Core.action("clear", resetAllData);
 Core.action("closetrade", closeTrade);
-Core.listen("input", e => {
-  const t = e.target;
-  if (t.dataset.aid !== undefined) {
-    onAccountInput(t);
-    return true;
+Core.listen(
+  "input",
+  e => {
+    const t = e.target;
+    if (t.dataset.aid !== undefined) {
+      onAccountInput(t);
+      return true;
+    }
+    // yeni etiket / hesap adı alanları yalnızca düğmeyle kaydedilir
+    if (t.dataset.newtag !== undefined || t.dataset.newacc !== undefined) return true;
+  },
+  {
+    when: e =>
+      e.target.dataset.aid !== undefined ||
+      e.target.dataset.newtag !== undefined ||
+      e.target.dataset.newacc !== undefined,
   }
-  // yeni etiket / hesap adı alanları yalnızca düğmeyle kaydedilir
-  if (t.dataset.newtag !== undefined || t.dataset.newacc !== undefined) return true;
-});
-Core.listen("change", e => {
-  const t = e.target;
-  if (t.dataset.file !== "csv" && t.dataset.file !== "json") return;
-  const f = t.files[0];
-  const merge = t.dataset.merge === "1";
-  t.value = "";
-  if (!f) return true;
-  if (t.dataset.file === "csv") importCsvFile(f);
-  else importJsonFile(f, merge);
-  return true;
-});
-Core.listen("keydown", e => {
-  if (e.key !== "Enter") return;
-  if (e.target.dataset.newacc !== undefined) {
-    e.preventDefault();
-    const b = document.querySelector('[data-act="addacc"]');
-    if (b) b.click();
+);
+Core.listen(
+  "change",
+  e => {
+    const t = e.target;
+    if (t.dataset.file !== "csv" && t.dataset.file !== "json") return;
+    const f = t.files[0];
+    t.value = "";
+    if (!f) return true;
+    if (t.dataset.file === "csv") importCsvFile(f);
+    else importJsonFile(f, false);
     return true;
+  },
+  { when: e => e.target.dataset.file === "csv" || e.target.dataset.file === "json" }
+);
+Core.listen(
+  "keydown",
+  e => {
+    if (e.key !== "Enter") return;
+    if (e.target.dataset.newacc !== undefined) {
+      e.preventDefault();
+      const b = document.querySelector('[data-act="addacc"]');
+      if (b) b.click();
+      return true;
+    }
+    if (e.target.dataset.newtag !== undefined) {
+      e.preventDefault();
+      const b =
+        e.target.closest(".card") && e.target.closest(".card").querySelector('[data-act="addtag"]');
+      if (b) b.click();
+      return true;
+    }
+  },
+  {
+    when: e =>
+      e.key === "Enter" &&
+      (e.target.dataset.newacc !== undefined || e.target.dataset.newtag !== undefined),
   }
-  if (e.target.dataset.newtag !== undefined) {
-    e.preventDefault();
-    const b =
-      e.target.closest(".card") && e.target.closest(".card").querySelector('[data-act="addtag"]');
-    if (b) b.click();
-    return true;
-  }
-});
+);

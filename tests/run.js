@@ -170,6 +170,8 @@ function load(store) {
     "addTag",
     "removeTag",
     "resetAllStores",
+    "restoreBackup",
+    "wipeStores",
     "num",
     "pnl",
     "risk",
@@ -1258,10 +1260,19 @@ test(
 const jsFiles = () => fs.readdirSync(path.join(DIR, "js")).filter(f => f.endsWith(".js"));
 const jsSrc = f => fs.readFileSync(path.join(DIR, "js", f), "utf8");
 test("G1", "Yalnızca app.js render() çağırır; ekranlar ve depolama olay yayar", () => {
-  const bad = jsFiles().filter(f => f !== "app.js" && /(^|[^.\w])render\(\)/m.test(jsSrc(f)));
+  const bad = jsFiles().filter(
+    f =>
+      f !== "app.js" &&
+      /(^|[^\w])(window\.)?render\s*\(\s*\)/m.test(jsSrc(f).replace(/function render\b/g, ""))
+  );
   expect(!bad.length, "render()'ı doğrudan çağıran dosya: " + bad.join(", "));
 });
 test("G2", "Depolama ve hesap katmanı ekranlara/DOM şablonlarına bağlı değil", () => {
+  // hesap ve sembol katmanları DOM'a ve ekran durumuna (form) da bağlı olmamalı
+  for (const f of ["calc.js", "symbols.js"]) {
+    const bad = jsSrc(f).match(/\b(document\.|window\.|form\b)/g);
+    expect(!bad, f + " DOM/ekran durumuna erişiyor: " + (bad || []).join(", "));
+  }
   for (const f of ["storage.js", "calc.js", "symbols.js", "utils.js"]) {
     const bad = jsSrc(f).match(/\b(view[A-Z]\w*|Core\.(route|nav|action|click|listen))\b/g);
     expect(!bad, f + " ekran katmanına erişiyor: " + (bad || []).join(", "));
@@ -1288,7 +1299,10 @@ test(
       for (const [name, owner] of Object.entries(owners))
         if (
           f !== owner &&
-          new RegExp("(^|[^.\\w])" + name + "\\s*(=[^=]|\\+\\+|--)", "m").test(jsSrc(f))
+          new RegExp(
+            "(^|[^.\\w])" + name + "(\\.[\\w]+|\\[[^\\]]+\\])?\\s*(=[^=]|[-+*/]=|\\+\\+|--)",
+            "m"
+          ).test(jsSrc(f))
         )
           bad.push(f + " → " + name);
     expect(!bad.length, "başka dosyanın durumuna yazıyor: " + bad.join(", "));
@@ -1300,6 +1314,11 @@ test("G4", "index.html'deki her betik service worker önbelleğinde (çevrimdı�
   const scripts = [...html.matchAll(/<script src="(js\/[^"]+)"/g)].map(m => m[1]);
   const missing = scripts.filter(s => !sw.includes('"./' + s + '"'));
   expect(!missing.length, "sw.js ASSETS'te olmayan betik: " + missing.join(", "));
+  const assets = [...html.matchAll(/(?:href|src)="((?:css\/|icon-|manifest)[^"]+)"/g)].map(
+    m => m[1]
+  );
+  const missingAssets = assets.filter(s => !sw.includes('"./' + s + '"'));
+  expect(!missingAssets.length, "sw.js ASSETS'te olmayan varlık: " + missingAssets.join(", "));
   const unlisted = jsFiles().filter(f => !html.includes('src="js/' + f + '"'));
   expect(!unlisted.length, "index.html'de yüklenmeyen js dosyası: " + unlisted.join(", "));
 });
@@ -1475,6 +1494,9 @@ test(
         "doğrudan kayıt çağrısı",
       ],
       [/\btrade\.\w+\s*=[^=]/, "kayıtlı işlem nesnesini değiştirme"],
+      [/\bstate\[/, "state[...] erişimi"],
+      [/\bstate\.\w+\[[^\]]+\]\.\w+\s*=[^=]/, "state içindeki nesneyi değiştirme"],
+      [/localStorage\.clear\(/, "localStorage.clear"],
     ];
     const bad = [];
     for (const f of views)
@@ -1545,6 +1567,120 @@ test("G9", "Her Core.slot adı bir ekranda Core.fill ile açılmış ve rehberde
   const undocumented = [...opened].filter(n => !doc.includes("`" + n + "`"));
   expect(!undocumented.length, "rehberde olmayan yuva: " + undocumented.join(", "));
 });
+
+// ===== J) Giriş olayı yolu (Core.listen + data-* yönlendirme) ====================
+const input = (env, dataset, value, extra) =>
+  env.handlers.input({ target: { dataset, value, ...extra } });
+test(
+  "J1",
+  "Hesap alanı yazımı form yokken de kaydedilir (eskiden form dinleyicisi olayı yutuyordu)",
+  async () => {
+    const { T, env, ctx, store } = load();
+    withAcc(T);
+    expect(T.form === null, "form null olmalı (Hesaplar sayfasında form yok)");
+    input(env, { aid: "name:a1" }, "Ad2");
+    input(env, { aid: "balance:a1" }, "555");
+    input(env, { aid: "cur:a1" }, "eur");
+    const a = T.state.accounts[0];
+    expect(a.name === "Ad2" && a.balance === 555 && a.cur === "EUR", JSON.stringify(a));
+    expect(T.state.prefsCur === "EUR", "prefsCur güncellenmedi");
+    await sleep(600);
+    expect(store.log.includes("tj_acc_v1"), "hesap kaydı yazılmadı");
+    expect(ctx !== null, "");
+  }
+);
+test(
+  "J2",
+  "Giriş olayları ilgili dosyaya gider: form açıkken hesap alanı da, form alanı da çalışır",
+  () => {
+    const { T, env, ctx } = load();
+    withAcc(T);
+    vm.runInContext("form = emptyForm();", ctx);
+    input(env, { aid: "name:a1" }, "X");
+    input(env, { f: "notes" }, "merhaba");
+    expect(T.state.accounts[0].name === "X", "hesap adı değişmedi (form açıkken)");
+    expect(vm.runInContext("form.notes", ctx) === "merhaba", "form alanı değişmedi");
+  }
+);
+test("J3", "Core.listen when: koşulu sağlanmayan işleyici çağrılmaz ve olayı yutamaz", () => {
+  const { T, ctx } = load();
+  vm.runInContext(
+    `globalThis.__c = [];
+     Core.listen("input", () => { __c.push("a"); return true; }, { when: e => e.target.dataset.zz !== undefined });
+     Core.listen("input", () => { __c.push("b"); return true; });`,
+    ctx
+  );
+  T.Core.dispatch("input", { target: { dataset: { q: "1" } } });
+  expect(ctx.__c.join() === "b", "when koşulsuz çağrıldı: " + ctx.__c.join());
+});
+test("H8", "reinsertTrade kaydeder (geri al sayfa yenilenince kaybolmaz)", () => {
+  const { T, store } = load();
+  withAcc(T);
+  T.upsertTrade(mkTrade("A"));
+  const r = T.removeTrade("A");
+  store.log.length = 0;
+  T.reinsertTrade(r.trade, r.index);
+  expect(store.log.includes("tj_trades_v1"), "geri alma localStorage'a yazılmadı");
+});
+test(
+  "H9",
+  "closeTradeAt: çıkış zamanı giriş zamanından önce olamaz; addTag 24 karaktere keser",
+  () => {
+    const { T } = load();
+    withAcc(T);
+    T.upsertTrade(mkTrade("A", { date: "2099-01-01T00:00" }));
+    T.closeTradeAt("A", 1.2);
+    expect(
+      T.state.trades[0].exitDate === "2099-01-01T00:00",
+      "exitDate " + T.state.trades[0].exitDate
+    );
+    T.addTag("setups", "x".repeat(40));
+    expect(T.state.tags.setups.includes("x".repeat(24)), "etiket 24 karaktere kesilmedi");
+  }
+);
+test(
+  "H10",
+  "resetAllStores IndexedDB'yi de siler: yeniden açınca eski işlemler geri gelmez",
+  async () => {
+    const s = newStore();
+    const a = load(s);
+    withAcc(a.T);
+    a.T.upsertTrade(mkTrade("A"));
+    await sleep(40);
+    a.T.resetAllStores();
+    await sleep(60);
+    const b = load(s);
+    await b.T.loadAll();
+    expect(b.T.state.trades.length === 0, "sıfırlamadan sonra işlem " + b.T.state.trades.length);
+  }
+);
+test("H11", "restoreBackup işlem, hesap ve etiketleri kaydeder", () => {
+  const src = load();
+  withAcc(src.T);
+  src.T.upsertTrade(mkTrade("A"));
+  const raw = JSON.parse(src.T.backupJson());
+  const { T, store } = load();
+  withAcc(T);
+  store.log.length = 0;
+  expect(T.restoreBackup(raw) === 1, "geri yüklenen işlem sayısı 1 olmalı");
+  const need = ["tj_trades_v1", "tj_acc_v1", "tj_tags_v1"].filter(k => !store.log.includes(k));
+  expect(!need.length, "kaydedilmeyen anahtarlar: " + need.join(", "));
+});
+test(
+  "H12",
+  "Kartlar slotla bağlı: limit bannerı ve kontrol listesi Ekle'de, prop/haftalık not Bugün'de",
+  () => {
+    const { T, ctx } = load();
+    withAcc(T);
+    T.state.trades = [base];
+    vm.runInContext("form = emptyForm();", ctx);
+    expect(
+      T.viewAdd().includes("chkN") || T.viewAdd().includes("data-chk"),
+      "kontrol listesi Ekle'de yok"
+    );
+    expect(T.viewHome().includes("wkNote"), "haftalık değerlendirme Bugün'de yok");
+  }
+);
 
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {

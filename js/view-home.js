@@ -60,8 +60,7 @@ ${state.memoryOnly ? `<div class="card" style="font-size:15px;color:var(--muted)
 ${best && best.net > 0 ? `<div class="rowline"><span>En iyi setup</span><span>${esc(best.key)} <span class="mono ${pnlClass(best.net)}">${money(best.net)}</span></span></div>` : ""}
 ${leak ? `<div class="rowline"><span>En büyük sızıntı</span><span>${esc(leak.key)} <span class="mono dn">${money(leak.net)}</span></span></div>` : ""}
 </div></div>
-${quickEvalCard()}${propCard()}
-${reviewCard()}
+${quickEvalCard()}
 ${Core.fill("home.cards", { trades, todayTrades, weekTrades })}
 ${opens.length ? `<div class="gap2"><h2 class="h2t">Açık pozisyonlar (${opens.length})</h2>${opens.map(tradeCard).join("")}</div>` : ""}
 <div class="sechead">
@@ -194,16 +193,20 @@ Core.action("more", () => {
   const list = $("#tradeList");
   if (list) list.innerHTML = tradesListHtml();
 });
-Core.listen("input", e => {
-  const t = e.target;
-  if (t.id === "qcNote") {
-    qcNote = t.value;
-    return true;
-  }
-  if (t.dataset.lq !== undefined) {
-    listState.q = t.value;
-    const tl = $("#tradeList");
-    if (tl) tl.innerHTML = tradesListHtml();
-    return true;
-  }
-});
+Core.listen(
+  "input",
+  e => {
+    const t = e.target;
+    if (t.id === "qcNote") {
+      qcNote = t.value;
+      return true;
+    }
+    if (t.dataset.lq !== undefined) {
+      listState.q = t.value;
+      const tl = $("#tradeList");
+      if (tl) tl.innerHTML = tradesListHtml();
+      return true;
+    }
+  },
+  { when: e => e.target.id === "qcNote" || e.target.dataset.lq !== undefined }
+);

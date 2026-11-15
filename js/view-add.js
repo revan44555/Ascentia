@@ -193,8 +193,6 @@ function viewAdd() {
   const existing = form.id ? state.trades.find(t => t.id === form.id) : null;
   return `<div class="stack4">
 <header class="page-h"><p class="eyebrow">Kayıt</p><h1>${existing ? "İşlemi düzenle" : "Yeni işlem"}</h1></header>
-${limitBanner()}
-${checklistCard()}
 ${Core.fill("add.top", { form })}
 <div class="stack4 addgrid">
 <div class="card s3" style="padding:16px">
@@ -471,8 +469,7 @@ function onFormInput(e) {
     if (tagDraft) tagDraft.value = t.value;
     return true;
   }
-  if (!form) return true;
-  if (t.dataset.f === undefined) return true;
+  if (!form || t.dataset.f === undefined) return;
   const f = t.dataset.f;
   let v = t.value;
   if (["entry", "stop", "tp", "stop0", "exit"].includes(f)) {
@@ -563,44 +560,84 @@ Core.action("tagdraft", el => {
 });
 Core.action("addsym", addCustomSymbol);
 Core.action("clone", cloneTrade);
-Core.listen("input", onFormInput);
-Core.listen("change", e => {
-  const t = e.target;
-  if (t.dataset.file !== "img") return;
-  const f = t.files[0];
-  t.value = "";
-  if (!f) return true;
-  if (!/^image\//.test(f.type)) {
-    toast("Görsel dosyası seç", "err");
-    return true;
-  }
-  imgPrep(f)
-    .then(u => {
-      if (!form) return;
-      form.img = u;
-      Core.refresh();
-      toast("Görsel eklendi");
-    })
-    .catch(() => toast("Görsel eklenemedi (çok büyük olabilir)", "err"));
-  return true;
+Core.listen("input", onFormInput, {
+  when: e => e.target.dataset.tagdraft !== undefined || (form && e.target.dataset.f !== undefined),
 });
+Core.listen(
+  "change",
+  e => {
+    const t = e.target;
+    if (t.dataset.file !== "img") return;
+    const f = t.files[0];
+    t.value = "";
+    if (!f) return true;
+    if (!/^image\//.test(f.type)) {
+      toast("Görsel dosyası seç", "err");
+      return true;
+    }
+    imgPrep(f)
+      .then(u => {
+        if (!form) return;
+        form.img = u;
+        Core.refresh();
+        toast("Görsel eklendi");
+      })
+      .catch(() => toast("Görsel eklenemedi (çok büyük olabilir)", "err"));
+    return true;
+  },
+  { when: e => e.target.dataset.file === "img" }
+);
 // Enter sonraki alana geçer, son alanda kaydeder; datetime dahil tutarlı
-Core.listen("keydown", e => {
-  if (e.key !== "Enter") return;
-  if (e.target.dataset.f && e.target.tagName === "INPUT") {
-    e.preventDefault();
-    const all = [...document.querySelectorAll("#view input[data-f]")],
-      i = all.indexOf(e.target);
-    if (all[i + 1]) all[i + 1].focus();
-    else saveForm();
-    return true;
+Core.listen(
+  "keydown",
+  e => {
+    if (e.key !== "Enter") return;
+    if (e.target.dataset.f && e.target.tagName === "INPUT") {
+      e.preventDefault();
+      const all = [...document.querySelectorAll("#view input[data-f]")],
+        i = all.indexOf(e.target);
+      if (all[i + 1]) all[i + 1].focus();
+      else saveForm();
+      return true;
+    }
+    if (e.target.dataset.tagdraft !== undefined && tagDraft) {
+      e.preventDefault();
+      const v = e.target.value,
+        kind = tagDraft.kind;
+      tagDraft = null;
+      addTagFeedback(kind, v);
+      return true;
+    }
+  },
+  {
+    when: e =>
+      e.key === "Enter" &&
+      (e.target.dataset.f !== undefined || e.target.dataset.tagdraft !== undefined),
   }
-  if (e.target.dataset.tagdraft !== undefined && tagDraft) {
-    e.preventDefault();
-    const v = e.target.value,
-      kind = tagDraft.kind;
-    tagDraft = null;
-    addTagFeedback(kind, v);
-    return true;
+);
+
+/* ---- Sembol: forma uygulama ve ipucu (symbols.js yalnız veri/arama; form bu dosyanın) ---- */
+function applySym(nm) {
+  form.symbol = nm;
+  if (!form.id && form.qty === "" && LASTLOT[nm]) {
+    form.qty = LASTLOT[nm];
+    const qi = document.querySelector("[data-f=qty]");
+    if (qi) qi.value = form.qty;
   }
-});
+  const i = SYMS.find(x => x[0] === nm);
+  if (i && !form.id && (form.mult === "" || form.multAuto)) {
+    form.mult = i[1] !== 1 ? String(i[1]) : "";
+    form.multAuto = true;
+  }
+}
+function symHint(strict) {
+  const raw = String(form.symbol || "").trim();
+  if (!raw) return "";
+  const r = symFind(raw),
+    nm = r.exact || r.auto;
+  if (nm) {
+    const i = SYMS.find(x => x[0] === nm);
+    return `<p class="subtle" style="font-size:13px">${nm !== raw.toUpperCase() ? `<span class="up">→ ${esc(nm)}</span> · ` : ""}${i ? esc(i[2] + " · " + i[3]) + (i[2] === "Forex" && !nm.endsWith("USD") ? " · ⚠ P&L " + nm.slice(3, 6) + " cinsinden · kuru ek alanlara gir" : "") : "Özel sembol · çarpan 1 (vadeli ise ek alanlardan gir)"}</p>`;
+  }
+  return `<div class="chips">${r.sug.map(x => `<button type="button" class="chip off" data-sym="${esc(x)}">${esc(x)}</button>`).join("")}</div>${strict ? `<p class="dn" style="font-size:13px;margin-top:6px">"${esc(raw)}" listede yok.${r.sug.length ? " Yukarıdan birini seç ya da" : ""} <button type="button" class="chip off" data-act="addsym" style="height:32px">özel sembol olarak ekle</button></p>` : ""}`;
+}
