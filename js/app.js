@@ -84,5 +84,11 @@ $("#bottomNav").innerHTML = Core.navHtml("bottom");
 // PWA — yüklenebilirlik + çevrimdışı (yalnızca gerçek tarayıcıda)
 if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol || ""))
   window.addEventListener("load", () => {
+    // ilk kurulumda (denetleyici yokken) bildirim çıkmaz; yalnız çalışan bir sürüm yenisiyle değişince
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hadController)
+        toast("Yeni sürüm hazır", null, 15000, { label: "Yenile", fn: () => location.reload() });
+    });
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });

@@ -17,11 +17,7 @@ function bigMoney(n) {
   return i < 0 ? s : s.slice(0, i) + `<span class="cents">${s.slice(i)}</span>`;
 }
 function plHidden() {
-  try {
-    return localStorage.getItem("tj_hidepl") === "1";
-  } catch (e) {
-    return false;
-  }
+  return lsGet("tj_hidepl") === "1";
 }
 function viewHome() {
   if (!state.trades.length) {
@@ -46,9 +42,9 @@ function viewHome() {
   const hide = plHidden();
   const recent = trades
     .filter(t => t.exit != null)
-    .sort((a, b) => b.date.localeCompare(a.date))
+    .sort((a, b) => byTime(b.date, a.date))
     .slice(0, 5);
-  const opens = trades.filter(t => t.exit == null).sort((a, b) => a.date.localeCompare(b.date));
+  const opens = trades.filter(t => t.exit == null).sort((a, b) => byTime(a.date, b.date));
   return `<div class="stack home-view${hide ? " pl-hide" : ""}">
 <header class="page-h home-page-h"><div class="brand-lockup"><span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 25 16 5l11 20M10 18h12" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="brand-copy"><span class="brand-name">Ascentia</span><span class="brand-caption">TRADE JOURNAL</span></span></div><div class="home-tools"><button type="button" class="home-settings" data-act="hidepl" aria-pressed="${hide}" aria-label="${hide ? "P&amp;L göster" : "P&amp;L gizle"}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${hide ? '<path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0 1 12 6c6 0 10 6 10 6a17 17 0 0 1-3.2 3.7M6.6 6.7C3.9 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 4.4-1"/>' : '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'}</svg></button><a href="#/more" class="home-settings" aria-label="Ayarlar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z"/></svg></a></div></header>
 ${state.memoryOnly ? `<div class="card" style="font-size:15px;color:var(--muted)">Depolama kullanılamıyor. Veriler yalnızca bu oturumda durur.</div>` : ""}
@@ -92,7 +88,7 @@ function filteredTrades() {
   if (listState.result === "open") list = list.filter(t => t.exit == null);
   if (listState.result === "win") list = list.filter(t => (pnl(t) ?? 0) > 0);
   if (listState.result === "loss") list = list.filter(t => (pnl(t) ?? 0) < 0);
-  return list.slice().sort((a, b) => b.date.localeCompare(a.date));
+  return list.slice().sort((a, b) => byTime(b.date, a.date));
 }
 function tradesListHtml() {
   const list = filteredTrades();
@@ -148,9 +144,7 @@ Core.route("/", { view: viewHome });
 Core.route("/trades", { nav: "/trades", view: viewTrades });
 Core.click("lchip", { run: onListChip });
 Core.action("hidepl", () => {
-  try {
-    localStorage.setItem("tj_hidepl", localStorage.getItem("tj_hidepl") === "1" ? "0" : "1");
-  } catch (e) {}
+  lsSet("tj_hidepl", plHidden() ? "0" : "1");
   Core.refresh();
 });
 Core.action("more", () => {

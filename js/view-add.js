@@ -316,11 +316,8 @@ function saveForm() {
   };
   const old0 = form.id ? state.trades.find(t => t.id === form.id) : null;
   rec.qc = old0 ? old0.qc || 0 : form.qc || 0;
-  let chkToday = null;
-  try {
-    const s0 = localStorage.getItem("tj_chk_" + todayStamp());
-    if (typeof s0 === "string" && s0.length) chkToday = [...s0].filter(c => c === "1").length;
-  } catch (e) {}
+  const chkRaw = lsGet("tj_chk_" + todayStamp()),
+    chkToday = chkRaw ? [...chkRaw].filter(c => c === "1").length : null;
   rec.chk = old0 ? old0.chk : chkToday;
   if (old0 && old0.grp) rec.grp = old0.grp;
   const qc =
@@ -349,14 +346,10 @@ function saveForm() {
     return;
   }
   if (ex0 != null && !rec.exitDate) rec.exitDate = now;
-  try {
-    localStorage.removeItem("tj_draft");
-  } catch (e) {}
+  lsDel("tj_draft");
   const isNew = upsertTrade(rec);
   LASTLOT[sym] = rec.qty;
-  try {
-    localStorage.setItem("tj_lastlot_v1", JSON.stringify(LASTLOT));
-  } catch (e) {}
+  lsSet("tj_lastlot_v1", JSON.stringify(LASTLOT));
   const justAdded = rec.id;
   form = null;
   location.replace("#/trades/" + encodeURIComponent(justAdded));
@@ -423,7 +416,7 @@ function cloneTrade(el) {
 function enterAdd({ path, params }) {
   const d = (() => {
     try {
-      return JSON.parse(localStorage.getItem("tj_draft") || "null");
+      return JSON.parse(lsGet("tj_draft") || "null");
     } catch (e) {
       return null;
     }
@@ -449,16 +442,14 @@ function leaveAdd(hash) {
   if (hash.startsWith("#/add")) return;
   // düzenleme formları da taslak olarak korunur (anahtar: __editId)
   if (form && form.__for && form.__for.startsWith("/add") && formDirty()) {
-    try {
-      localStorage.setItem(
-        "tj_draft",
-        JSON.stringify({
-          ...form,
-          __editId: form.id || null,
-          __sig: form.id ? tradeSig(state.trades.find(t => t.id === form.id)) : "",
-        })
-      );
-    } catch (e) {}
+    lsSet(
+      "tj_draft",
+      JSON.stringify({
+        ...form,
+        __editId: form.id || null,
+        __sig: form.id ? tradeSig(state.trades.find(t => t.id === form.id)) : "",
+      })
+    );
   }
   form = null;
 }

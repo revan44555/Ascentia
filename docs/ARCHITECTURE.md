@@ -33,7 +33,7 @@ Bunu birkaç kural ve küçük bir çekirdek (`js/core.js`) sağlar; kuralları 
 4. **Ekranlar veriyi yazmaz.** `state.…` ataması, `state` dizisine `push/splice`, işlem nesnesini değiştirme ve `saveTrades()` gibi çağrılar `view-*.js` ve `ui.js` içinde yasaktır; `services.js` işlevi kullanılır. Servisler DOM'a dokunmaz, toast göstermez, ekranı çizdirmez: sonucu döndürür, ne gösterileceğine ekran karar verir. (G8)
 5. **Saf katmanlar ekranı bilmez.** `calc.js`, `utils.js`, `symbols.js`, `storage.js` içinde `view…` ya da `Core.route/nav/action` geçmez. (G2)
 6. **Yeni dosya IIFE içinde yazılır** (`(() => { … })();`). Tüm klasik betikler tek global kapsamı paylaşır; aynı üst düzey ad iki dosyada tanımlanırsa sayfa açılmaz (`npm run lint` bunu da yakalar).
-7. **Her betik üç yerde listelenir:** `index.html`, `sw.js` `ASSETS` (+ `CACHE` sürümünü artır), `tests/run.js` `FILES`. Unutulursa G4 kırılır.
+7. **Her betik üç yerde listelenir:** `index.html`, `sw.js` `ASSETS`, `tests/run.js` `FILES`. Unutulursa G4 kırılır. Uygulama dosyası değişince `npm run stamp` çalıştır: `sw.js` önbellek özetini (`ASSET_HASH`) ve `index.html` CSP betik özetini günceller; eskiyse L12/L13 kırılır.
 
 ## Core API
 
@@ -99,7 +99,7 @@ Güvenceler: aynı yol/eylem iki kez kaydedilirse **hata** verir; bir olay işle
 ```
 
 2. `index.html`'de `view-more.js`'ten **önce** `<script src="js/view-risk.js"></script>` ekle.
-3. `sw.js` → `ASSETS`'e `"./js/view-risk.js"` ekle, `CACHE` sürümünü artır.
+3. `sw.js` → `ASSETS`'e `"./js/view-risk.js"` ekle, sonra `npm run stamp` çalıştır.
 4. `tests/run.js` → `FILES` listesine `"view-risk"` ekle, bir test yaz.
 5. `npm run check`
 

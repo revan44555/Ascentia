@@ -1,5 +1,11 @@
-/* Ascentia service worker — uygulama kabugunu onbellege alir, cevrimdisi acilis saglar */
-const CACHE = "ascentia-v6";
+/* Ascentia service worker — uygulama kabuğunu önbelleğe alır, çevrimdışı açılış sağlar.
+ *
+ * ASSET_HASH, ASSETS'teki dosyaların içeriğinden `npm run stamp` ile üretilir; dosyalardan biri
+ * değişip stamp çalıştırılmazsa `npm test` kırılır. Önbellek adı hash'ten türer: içerik değişince ad
+ * değişir, eski önbellek silinir, ve sayfa ile betikleri HER ZAMAN aynı sürümden gelir
+ * (eskiden eski/yeni dosyalar karışabiliyordu). */
+const ASSET_HASH = "82d9ef065d17";
+const CACHE = "ascentia-" + ASSET_HASH;
 const ASSETS = [
   "./",
   "./index.html",
@@ -41,30 +47,24 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
-  if (e.request.mode === "navigate") {
-    e.respondWith(
-      fetch(e.request)
-        .then(r => {
-          const cp = r.clone();
-          caches.open(CACHE).then(c => c.put("./index.html", cp));
-          return r;
-        })
-        .catch(() => caches.match("./index.html"))
-    );
-    return;
-  }
+  // Önce bu sürümün önbelleği: sayfa, betikler ve stiller aynı sürümden gelir. Yeni sürüm, tarayıcı
+  // sw.js'in değiştiğini görüp yeni önbelleği kurunca devreye girer (uygulama "Yenile" önerir).
+  const key = e.request.mode === "navigate" ? "./index.html" : e.request;
   e.respondWith(
-    caches.match(e.request).then(hit => {
-      const net = fetch(e.request)
-        .then(r => {
-          if (r.ok) {
-            const cp = r.clone();
-            caches.open(CACHE).then(c => c.put(e.request, cp));
-          }
-          return r;
-        })
-        .catch(() => hit);
-      return hit || net;
-    })
+    caches
+      .open(CACHE)
+      .then(c => c.match(key))
+      .then(
+        hit =>
+          hit ||
+          fetch(e.request).then(r => {
+            if (r.ok && e.request.mode !== "navigate") {
+              const cp = r.clone();
+              caches.open(CACHE).then(c => c.put(e.request, cp));
+            }
+            return r;
+          })
+      )
+      .catch(() => caches.open(CACHE).then(c => c.match("./index.html")))
   );
 });

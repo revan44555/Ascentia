@@ -179,18 +179,7 @@ function wkKey() {
   const y = t.getUTCFullYear();
   return y + "-W" + Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7);
 }
-const readLocal = k => {
-    try {
-      return localStorage.getItem(k) || "";
-    } catch (e) {
-      return "";
-    }
-  },
-  writeLocal = (k, v) => {
-    try {
-      localStorage.setItem(k, v);
-    } catch (e) {}
-  };
+const readLocal = k => lsGet(k) || "";
 const CHK = [
   "Setup planıma uyuyor",
   "Stop ve hedef belli",
@@ -228,7 +217,7 @@ new MutationObserver(() =>
   })
 ).observe(document.getElementById("view"), { childList: true });
 document.addEventListener("input", e => {
-  if (e.target.id === "wkNote") writeLocal("tj_review_" + wkKey(), e.target.value);
+  if (e.target.id === "wkNote") saveJournalNote("tj_review_" + wkKey(), e.target.value);
 });
 document.addEventListener("change", e => {
   if (e.target.dataset && e.target.dataset.chk !== undefined) {
@@ -236,7 +225,7 @@ document.addEventListener("change", e => {
       const c = document.querySelector('[data-chk="' + i + '"]');
       return c && c.checked ? "1" : "0";
     }).join("");
-    writeLocal(chkKey(), v);
+    saveJournalNote(chkKey(), v);
     const n = document.getElementById("chkN");
     if (n) n.textContent = [...v].filter(c => c === "1").length + "/" + CHK.length;
   }
@@ -322,6 +311,14 @@ ${Array.from({ length: offset }, () => "<div></div>").join("")}
 ${cells.map(c => `<div class="${tone(c)}" title="${c.date} · ${c.n} işlem · ${money(c.net)}" data-tip="${c.date} · ${c.n} işlem · ${money(c.net)}">${Number(c.date.slice(8))}</div>`).join("")}
 </div></div>`;
 }
+/** "Tüm hesaplar" toplamı para birimi çevirmez; hesaplar farklı birimdeyse bunu söyler. */
+function mixedCurrencyNote() {
+  if (state.filterAccountId !== "all") return "";
+  const cur = [...new Set(state.accounts.map(a => a.cur).filter(Boolean))];
+  return cur.length > 1
+    ? `<p class="subtle" style="font-size:13px">Hesapların para birimleri farklı (${cur.map(esc).join(", ")}). Tüm hesaplar toplamı çevrilmeden toplanır; tutarlı sonuç için tek hesap seç.</p>`
+    : "";
+}
 let INS_TAB = "ozet";
 const INS_TABS = [
   ["ozet", "Özet"],
@@ -388,6 +385,7 @@ ${kpi("Ort. R", s.avgR == null ? (s.closed ? "Stop yok" : "—") : formatR(s.avg
   return `<div class="stack">
 <h1 class="vh">Analiz</h1>
 <div class="ins-filters">${accChips()}${rangeChips()}</div>
+${mixedCurrencyNote()}
 ${insTabs()}
 ${body}
 ${Core.fill("insights.cards", { tab: INS_TAB, trades })}

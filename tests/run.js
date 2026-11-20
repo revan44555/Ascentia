@@ -71,8 +71,14 @@ function load(store) {
         store.ls[k] = String(v);
         store.log.push(k);
       },
-      removeItem() {},
+      removeItem(k) {
+        delete store.ls[k];
+      },
       clear() {},
+      key: i => Object.keys(store.ls)[i] ?? null,
+      get length() {
+        return Object.keys(store.ls).length;
+      },
     },
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     indexedDB: {
@@ -211,6 +217,19 @@ function load(store) {
     "form",
     "wipeStores",
     "readStores",
+    "balanceIndex",
+    "balanceAt",
+    "riskPcts",
+    "riskPct",
+    "duplicateMatcher",
+    "migrateBackup",
+    "backupTooNew",
+    "applyExtras",
+    "collectExtras",
+    "csvText",
+    "SCHEMA_VERSION",
+    "mixedCurrencyNote",
+    "exportJson",
   ];
   const T = vm.runInContext(
     "({" + names.map(n => `${n}:typeof ${n}!=='undefined'?${n}:undefined`).join(",") + "})",
@@ -1663,6 +1682,282 @@ test(
     expect(h.includes("1,1000"), "giriş fiyatı aynı ondalıkla (1,1000) görünmedi");
   }
 );
+
+// ===== L: inceleme düzeltmeleri =================================================
+const pad2 = n => String(n).padStart(2, "0");
+/** Deterministik, çok hesaplı, açık/aynı-an kapanan işlemler içeren veri kümesi. */
+function sampleTrades(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const day = 1 + (i % 20),
+      hour = 8 + (i % 10),
+      date = `2026-10-${pad2(day)}T${pad2(hour)}:00`,
+      open = i % 11 === 0,
+      zero = i % 7 === 0;
+    out.push({
+      ...base,
+      id: "s" + i,
+      date,
+      acc: i % 3 === 0 ? "a2" : i % 3 === 1 ? "a1" : "",
+      dir: i % 2 ? "LONG" : "SHORT",
+      entry: 1.1,
+      stop: i % 2 ? 1.095 : 1.105,
+      exit: open ? null : 1.1 + (((i * 7) % 13) - 6) / 1000,
+      exitDate: open ? "" : zero ? date : `2026-10-${pad2(day)}T${pad2(hour + 1)}:30`,
+    });
+  }
+  return out;
+}
+const twoAccounts = T => {
+  T.state.accounts = [
+    { id: "a1", name: "Ana", balance: 10000 },
+    { id: "a2", name: "İkinci", balance: 5000 },
+  ];
+  return T;
+};
+test("L1", "balanceAt dizini eski O(n²) hesabıyla birebir aynı bakiyeyi verir", () => {
+  const { T } = load();
+  twoAccounts(T);
+  T.state.trades = sampleTrades(150);
+  const ref = t => {
+    const id = T.accountId(t),
+      a = T.state.accounts.find(x => x.id === id) || T.state.accounts[0];
+    return (
+      a.balance +
+      T.state.trades
+        .filter(
+          x =>
+            x.id !== t.id &&
+            T.accountId(x) === id &&
+            (x.exitDate || x.date) <= t.date &&
+            T.pnl(x) != null
+        )
+        .reduce((s, x) => s + T.pnl(x), 0)
+    );
+  };
+  const idx = T.balanceIndex();
+  for (const t of T.state.trades) {
+    expect(near(T.balanceAt(t, idx), ref(t), 1e-6), "dizinli bakiye farklı: " + t.id);
+    expect(near(T.balanceAt(t), ref(t), 1e-6), "dizinsiz bakiye farklı: " + t.id);
+  }
+});
+test("L2", "3000 işlemde riskPcts/summarize saniyenin çok altında (eskiden ~2,7 sn)", () => {
+  const { T } = load();
+  twoAccounts(T);
+  T.state.trades = sampleTrades(3000);
+  const t0 = Date.now();
+  const n = T.riskPcts(T.state.trades).length;
+  const s = T.summarize(T.state.trades);
+  const ms = Date.now() - t0;
+  expect(n > 1000 && s.closed > 1000, "veri kümesi beklenenden küçük");
+  expect(ms < 1000, "çok yavaş: " + ms + " ms");
+});
+test(
+  "L3",
+  "CSV: aynı dakika/fiyat/lotla gelen iki AYRI işlem ikisi de eklenir, tekrar yüklenince hepsi atlanır",
+  () => {
+    const { T } = load();
+    withAcc(T);
+    const csv =
+      "tarih,sembol,yon,hacim,giris,kapanis\n10.11.2026 10:00,NAS100,buy,1,100,101\n10.11.2026 10:00,NAS100,buy,1,100,102\n";
+    const r1 = T.importCsv(csv);
+    expect(
+      r1.added === 2 && r1.skipped === 0,
+      "ilk yükleme: " + JSON.stringify([r1.added, r1.skipped])
+    );
+    T.state.trades = r1.trades;
+    const r2 = T.importCsv(csv);
+    expect(
+      r2.added === 0 && r2.skipped === 2,
+      "ikinci yükleme: " + JSON.stringify([r2.added, r2.skipped])
+    );
+  }
+);
+test("L4", "CSV: açık işlem sonradan kapatılıp aynı dosya yeniden yüklenirse kopya oluşmaz", () => {
+  const { T } = load();
+  withAcc(T);
+  const open = "tarih,sembol,yon,hacim,giris,kapanis\n10.11.2026 10:00,NAS100,buy,1,100,\n";
+  T.state.trades = T.importCsv(open).trades;
+  T.state.trades[0].exit = 101;
+  const closed = "tarih,sembol,yon,hacim,giris,kapanis\n10.11.2026 10:00,NAS100,buy,1,100,101\n";
+  const r = T.importCsv(closed);
+  expect(
+    r.added === 0 && r.skipped === 1,
+    "kopya eklendi: " + JSON.stringify([r.added, r.skipped])
+  );
+  const other = "tarih,sembol,yon,hacim,giris,kapanis\n10.11.2026 10:00,NAS100,buy,1,100,105\n";
+  expect(T.importCsv(other).added === 1, "farklı çıkışlı işlem kopya sayıldı");
+});
+test("L5", "CSV dışa → içe aktarma: = ile başlayan metin her turda ' kazanmaz", () => {
+  const { T } = load();
+  withAcc(T);
+  T.state.trades = [{ ...base, notes: "=1+1", setup: "-trend", mist: "@x" }];
+  const csv = T.tradesToCsv(T.state.trades);
+  expect(csv.includes("'=1+1"), "dışa aktarımda formül koruması yok");
+  T.state.trades = [];
+  const r = T.importCsv(csv);
+  const t = r.trades[0];
+  expect(
+    t && t.notes === "=1+1" && t.setup === "-trend" && t.mist === "@x",
+    "geri okunan: " + JSON.stringify(t)
+  );
+  expect(T.csvText("'normal") === "'normal", "başka ' kullanımı bozulmamalı");
+});
+test(
+  "L6",
+  "Yedek: haftalık not ve kontrol listesi (extras) yedeğe girer, geri yüklenir, birleştirmede ezilmez",
+  () => {
+    const a = load();
+    withAcc(a.T);
+    a.store.ls["tj_review_2026-W47"] = "Bu hafta sabırlıydım";
+    a.store.ls["tj_chk_2026-11-16"] = "1101";
+    a.store.ls["tj_baska"] = "yedeğe girmemeli";
+    a.T.state.trades = [base];
+    const raw = JSON.parse(a.T.backupJson());
+    expect(raw.schemaVersion === 3, "schemaVersion " + raw.schemaVersion);
+    expect(raw.extras["tj_review_2026-W47"] === "Bu hafta sabırlıydım", "not yedekte yok");
+    expect(raw.extras["tj_chk_2026-11-16"] === "1101", "kontrol listesi yedekte yok");
+    expect(!("tj_baska" in raw.extras), "ilgisiz anahtar yedeğe girdi");
+    const b = load();
+    withAcc(b.T);
+    expect(b.T.restoreBackup(raw) === 1, "geri yükleme");
+    expect(b.store.ls["tj_review_2026-W47"] === "Bu hafta sabırlıydım", "not geri yazılmadı");
+    const c = load();
+    withAcc(c.T);
+    c.store.ls["tj_review_2026-W47"] = "yerel not";
+    c.T.jsonmerge(raw);
+    expect(c.store.ls["tj_review_2026-W47"] === "yerel not", "birleştirme yerel notu ezdi");
+    expect(c.store.ls["tj_chk_2026-11-16"] === "1101", "eksik anahtar eklenmedi");
+  }
+);
+test("L7", "extras: geçersiz anahtar/değer yazılmaz", () => {
+  const { T, store } = load();
+  T.applyExtras(
+    {
+      tj_trades_v1: "[]",
+      "tj_review_2026-W01": "ok",
+      "tj_chk_2026-01-01": "xyz",
+      "tj_review_2026-W02": 5,
+      "tj_review_2026-W03": "x".repeat(20001),
+    },
+    true
+  );
+  expect(store.ls["tj_review_2026-W01"] === "ok", "geçerli yazılmadı");
+  expect(!store.ls["tj_trades_v1"], "işlem anahtarı üzerine yazıldı");
+  expect(!store.ls["tj_chk_2026-01-01"], "geçersiz kontrol listesi yazıldı");
+  expect(
+    !store.ls["tj_review_2026-W02"] && !store.ls["tj_review_2026-W03"],
+    "geçersiz not yazıldı"
+  );
+});
+test("L8", "Şema: eski (v1/v2) yedek açılır, yeni sürümden gelen yedek reddedilir", () => {
+  const { T } = load();
+  withAcc(T);
+  const old = { schemaVersion: 2, accounts: [{ id: "a1", name: "Ana" }], trades: [base] };
+  expect(T.migrateBackup(old).schemaVersion === 3, "v2 → v3 geçişi yok");
+  expect(T.migrateBackup({ accounts: [], trades: [] }).schemaVersion === 3, "sürümsüz yedek");
+  expect(T.restoreJson(old, true) === 1, "v2 yedek yüklenemedi");
+  const future = { ...old, schemaVersion: 99 };
+  expect(T.backupTooNew(future) && !T.backupTooNew(old), "backupTooNew");
+  expect(T.restoreJson(future, true) === null, "gelecek sürüm yüklendi");
+  expect(T.jsonmerge(future) === null, "gelecek sürüm birleştirildi");
+  expect(T.migrateBackup(null) === null && T.migrateBackup([]) === null, "geçersiz girdi");
+});
+test(
+  "L9",
+  "Hesapsız yedek geri yüklenince en az bir hesap kalır; sonrasında birleştirme çökmez",
+  () => {
+    const { T } = load();
+    withAcc(T);
+    const raw = { accounts: [], trades: [{ ...base, acc: "" }] };
+    expect(T.restoreJson(raw, true) === 1, "yedek yüklenmedi");
+    expect(T.state.accounts.length === 1, "hesap sayısı " + T.state.accounts.length);
+    const r = T.jsonmerge({
+      accounts: [],
+      trades: [{ ...base, id: "Y", date: "2026-10-05T10:00" }],
+    });
+    expect(r && r.added === 1, "birleştirme: " + JSON.stringify(r));
+  }
+);
+test(
+  "L10",
+  "Yedek paylaşımı iptal edilirse 'son yedek' güncellenmez, tamamlanırsa güncellenir",
+  async () => {
+    for (const [shared, expected] of [
+      [false, false],
+      [true, true],
+    ]) {
+      const { T, ctx } = load();
+      withAcc(T);
+      ctx.File = class {};
+      ctx.navigator = {
+        canShare: () => true,
+        share: () => (shared ? Promise.resolve() : Promise.reject(new Error("AbortError"))),
+      };
+      T.state.lastBackupAt = null;
+      T.exportJson();
+      await sleep(20);
+      expect(
+        !!T.state.lastBackupAt === expected,
+        "paylaşım " + shared + " → lastBackupAt " + T.state.lastBackupAt
+      );
+    }
+  }
+);
+test("L11", "Farklı para birimli hesaplar 'Tüm hesaplar'da uyarı alır; tek birimde alınmaz", () => {
+  const { T } = load();
+  T.state.accounts = [
+    { id: "a1", name: "A", balance: 1, cur: "USD" },
+    { id: "a2", name: "B", balance: 1, cur: "EUR" },
+  ];
+  T.state.filterAccountId = "all";
+  expect(
+    T.mixedCurrencyNote().includes("EUR") && T.mixedCurrencyNote().includes("USD"),
+    "uyarı yok"
+  );
+  T.state.filterAccountId = "a1";
+  expect(T.mixedCurrencyNote() === "", "tek hesap seçiliyken uyarı");
+  T.state.accounts[1].cur = "USD";
+  T.state.filterAccountId = "all";
+  expect(T.mixedCurrencyNote() === "", "aynı birimde uyarı");
+});
+test(
+  "L12",
+  "Service worker: ASSET_HASH dosya içeriğiyle güncel (eskiyse `npm run stamp` çalıştır)",
+  () => {
+    const { assetHash } = require("./sw-hash");
+    const sw = fs.readFileSync(path.join(DIR, "sw.js"), "utf8");
+    const m = /const ASSET_HASH = "([0-9a-f]+)";/.exec(sw);
+    expect(m, "sw.js'te ASSET_HASH yok");
+    expect(
+      m[1] === assetHash(DIR),
+      "ASSET_HASH eski: `npm run stamp` çalıştır (olması gereken " + assetHash(DIR) + ")"
+    );
+    expect(/const CACHE = "ascentia-" \+ ASSET_HASH;/.test(sw), "önbellek adı hash'ten türemiyor");
+  }
+);
+test("L13", "CSP: index.html'de var ve satır içi betiğin özetiyle eşleşir", () => {
+  const html = fs.readFileSync(path.join(DIR, "index.html"), "utf8");
+  const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html);
+  expect(csp, "CSP meta yok");
+  expect(
+    /default-src 'self'/.test(csp[1]) && /object-src 'none'/.test(csp[1]),
+    "CSP temel kuralları"
+  );
+  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  expect(inline.length === 1, "satır içi betik sayısı " + inline.length);
+  const digest = require("crypto").createHash("sha256").update(inline[0][1]).digest("base64");
+  expect(
+    csp[1].includes("'sha256-" + digest + "'"),
+    "CSP betik özeti eski: `npm run stamp` çalıştır"
+  );
+  expect(!/unsafe-eval|script-src[^;]*unsafe-inline/.test(csp[1]), "script-src gevşetilmiş");
+});
+test("L14", "Manifest: id, kısayollar ve kategoriler tanımlı", () => {
+  const m = JSON.parse(fs.readFileSync(path.join(DIR, "manifest.json"), "utf8"));
+  expect(m.id && Array.isArray(m.categories) && m.categories.length, "id/categories");
+  expect(Array.isArray(m.shortcuts) && m.shortcuts.every(s => s.name && s.url), "shortcuts");
+});
 
 // ---- çalıştır ----------------------------------------------------------------
 (async () => {

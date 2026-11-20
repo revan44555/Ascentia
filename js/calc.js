@@ -10,8 +10,10 @@ function accountId(t) {
 function closedAt(t) {
   return t.exitDate || t.date;
 }
+// ISO tarih damgaları sözlük sırasıyla zaten kronolojiktir; localeCompare yerine düz karşılaştırma (çok daha hızlı)
+const byTime = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 function byExit(a) {
-  return a.slice().sort((x, y) => closedAt(x).localeCompare(closedAt(y)));
+  return a.slice().sort((x, y) => byTime(closedAt(x), closedAt(y)));
 }
 function holdMin(t) {
   if (!t.exitDate || !t.date) return null;
@@ -113,25 +115,62 @@ function rr(t) {
     r = risk(t);
   return p == null || r == null ? null : p / r;
 }
-function balanceAt(t) {
+/**
+ * Bakiye sorguları için dizin: hesap başına kapanış zamanına göre sıralı, birikimli P&L.
+ * Her işlem için tüm işlemleri yeniden süzmek O(n²) idi (3000 işlemde ~2,7 sn); dizinle sorgu O(log n).
+ * Toplu hesaplarda (riskPcts) bir kez kurulur ve balanceAt/riskPct'e geçirilir.
+ */
+function balanceIndex() {
+  const byAcc = new Map(),
+    byId = new Map();
+  for (const x of state.trades) {
+    const p = pnl(x);
+    if (p == null) continue;
+    const acc = accountId(x),
+      ts = closedAt(x);
+    byId.set(x.id, { acc, ts, p });
+    let list = byAcc.get(acc);
+    if (!list) byAcc.set(acc, (list = []));
+    list.push({ ts, p, cum: 0 });
+  }
+  for (const list of byAcc.values()) {
+    list.sort((u, v) => byTime(u.ts, v.ts));
+    let sum = 0;
+    for (const e of list) e.cum = sum += e.p;
+  }
+  return { byAcc, byId };
+}
+/** t'nin girişinden önce (ya da aynı anda) kapanmış işlemlerin P&L'i eklenmiş hesap bakiyesi. */
+function balanceAt(t, index) {
   const a = accountOf(t);
   if (!a || !(a.balance > 0)) return null;
-  return (
-    a.balance +
-    state.trades
-      .filter(
-        x =>
-          x.id !== t.id && accountId(x) === accountId(t) && closedAt(x) <= t.date && pnl(x) != null
-      )
-      .reduce((s, x) => s + pnl(x), 0)
-  );
+  const ix = index || balanceIndex(),
+    acc = accountId(t),
+    list = ix.byAcc.get(acc);
+  let sum = 0;
+  if (list) {
+    // kapanışı t.date'e eşit ya da önce olan son kayıt (ikili arama)
+    let lo = 0,
+      hi = list.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (list[mid].ts <= t.date) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo) sum = list[lo - 1].cum;
+  }
+  // işlemin kendisi toplama girmez (aynı anda açılıp kapanmışsa çıkarılır)
+  const self = ix.byId.get(t.id);
+  if (self && self.acc === acc && self.ts <= t.date) sum -= self.p;
+  return a.balance + sum;
 }
 function riskPcts(trades) {
-  return trades.map(riskPct).filter(v => v != null);
+  const index = balanceIndex();
+  return trades.map(t => riskPct(t, index)).filter(v => v != null);
 }
-function riskPct(t) {
+function riskPct(t, index) {
   const r = risk(t),
-    b = balanceAt(t);
+    b = balanceAt(t, index);
   return r == null || b == null || b <= 0 ? null : (r / b) * 100;
 }
 function currentBalance(a) {
@@ -170,7 +209,7 @@ function unitize(trades) {
       rs = u.map(risk),
       last = u
         .slice()
-        .sort((a, b) => closedAt(a).localeCompare(closedAt(b)))
+        .sort((a, b) => byTime(closedAt(a), closedAt(b)))
         .pop();
     return {
       ...rep,

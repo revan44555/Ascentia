@@ -12,6 +12,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - run: npm run stamp && git diff --exit-code sw.js index.html
       - run: npm run format:check
       - run: npm run lint
       - run: npm test

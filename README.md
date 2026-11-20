@@ -25,6 +25,7 @@ Uygulamanın kendisi bağımlılıksızdır; araçlar yalnızca geliştirme içi
 | `npm run test:e2e` | Gerçek Chromium'da 390px mobilde tıklama testleri (`tests/e2e.js`, Playwright) |
 | `npm run lint` | ESLint + tüm `js/` dosyalarını birleştirip tanımsız/kullanılmayan ad kontrolü (`tests/lint.js`) |
 | `npm run format` | Prettier ile biçimlendirir (`.prettierrc`, `.editorconfig`) |
+| `npm run stamp` | Dosyalar değişince `sw.js` önbellek özetini ve `index.html` CSP özetini günceller (eskiyse test kırılır) |
 | `npm run check` | biçim + lint + test (CI'da da çalışır) |
 
 Yeni özellik eklemek için **mevcut dosyalara dokunmana gerek yok**: yeni bir `js/view-*.js` dosyası kendini

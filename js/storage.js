@@ -32,6 +32,12 @@ function lsSet(k, v) {
     return false;
   }
 }
+function lsDel(k) {
+  try {
+    localStorage.removeItem(k);
+  } catch (e) {}
+}
+const DEFAULT_ACCOUNT = () => ({ id: "a1", name: "Ana hesap", balance: 0, dl: 0, md: 0, cur: "" });
 const IDB_TIMEOUT = 4000;
 let _db = null;
 function idb() {
@@ -140,15 +146,73 @@ function saveBackupStamp(ts) {
 let fh = null,
   fileTimer = null;
 const hasFS = typeof window.showSaveFilePicker === "function";
+/* ------------------------------------------------------------------------- *
+ *  Yedek biçimi
+ *
+ *  schemaVersion 1–2: accounts, trades, tags.
+ *  schemaVersion 3  : + extras (haftalık değerlendirme notları ve günlük kontrol listesi;
+ *                     bunlar localStorage'da durur ve eskiden yedeğe girmiyordu).
+ *  Yedeği okuyan her yer önce migrateBackup'tan geçirir; yeni sürümden gelen yedek reddedilir.
+ *  Biçim değişince SCHEMA_VERSION'ı artır ve migrateBackup'a bir adım ekle.
+ * ------------------------------------------------------------------------- */
+const SCHEMA_VERSION = 3;
+// yalnız bu anahtarlar yedeğe girer / yedekten yazılır (gelişigüzel localStorage anahtarı yazılamaz)
+const EXTRA_KEY = /^tj_(review_\d{4}-W\d{1,2}|chk_\d{4}-\d{2}-\d{2})$/;
+function validExtra(k, v) {
+  return (
+    EXTRA_KEY.test(k) &&
+    typeof v === "string" &&
+    v.length <= 20000 &&
+    (!k.startsWith("tj_chk_") || /^[01]{1,8}$/.test(v))
+  );
+}
+function collectExtras() {
+  const out = {};
+  try {
+    if (typeof localStorage.key !== "function") return out;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i),
+        v = k && EXTRA_KEY.test(k) ? lsGet(k) : null;
+      if (v) out[k] = v;
+    }
+  } catch (e) {}
+  return out;
+}
+/** Yedekteki extras'ı yazar. overwrite=false ise mevcut anahtarlara dokunmaz (birleştirme). */
+function applyExtras(extras, overwrite) {
+  if (!extras || typeof extras !== "object") return 0;
+  let n = 0;
+  for (const k of Object.keys(extras)) {
+    if (!validExtra(k, extras[k])) continue;
+    if (!overwrite && lsGet(k)) continue;
+    if (lsSet(k, extras[k])) n++;
+  }
+  return n;
+}
+/** Bu uygulamanın bildiğinden daha yeni bir sürümden gelen yedek mi? */
+function backupTooNew(raw) {
+  return !!raw && Number(raw.schemaVersion) > SCHEMA_VERSION;
+}
+/** Her sürümün yedeğini güncel biçime getirir (kopya döner). Nesne değilse null. */
+function migrateBackup(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out = { ...raw, schemaVersion: Number(raw.schemaVersion) || 1 };
+  if (out.schemaVersion < 3) {
+    out.extras = {};
+    out.schemaVersion = 3;
+  }
+  return out;
+}
 function backupJson() {
   return JSON.stringify(
     {
-      schemaVersion: 2,
+      schemaVersion: SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       source: "ascentia",
       accounts: state.accounts,
       trades: state.trades,
       tags: state.tags,
+      extras: collectExtras(),
     },
     null,
     2
@@ -342,7 +406,9 @@ function applyTheme() {
 }
 
 function restoreJson(raw, silent) {
-  if (!raw || !Array.isArray(raw.accounts) || !Array.isArray(raw.trades)) return null;
+  raw = migrateBackup(raw);
+  if (!raw || backupTooNew(raw) || !Array.isArray(raw.accounts) || !Array.isArray(raw.trades))
+    return null;
   if (!silent && state.trades.length) {
     const n = (raw.trades || []).length;
     if (
@@ -361,17 +427,46 @@ function restoreJson(raw, silent) {
     md: num(a.md) || 0,
     cur: a.cur ? String(a.cur).toUpperCase() : "",
   }));
+  // hesapsız yedek ekranları ve birleştirmeyi bozardı: her zaman en az bir hesap
+  if (!state.accounts.length) state.accounts = [DEFAULT_ACCOUNT()];
   state.trades = (raw.trades || []).map(normTrade).filter(Boolean);
   if (raw.tags) state.tags = normTags(raw.tags);
+  applyExtras(raw.extras, true);
   markBackup();
   Core.emit("data:changed");
   return state.trades.length;
 }
+/**
+ * Yinelenen işlem eşleştirici. Mevcut işlemler bir havuz olur; gelen her kayıt havuzdan EN FAZLA BİR
+ * mevcut kaydı eşleyip tüketir. Böylece:
+ *  - aynı dosya iki kez yüklenince hepsi atlanır,
+ *  - aynı dakika/fiyat/lotla gelen iki AYRI işlem (parçalı dolum) ilk yüklemede ikisi de eklenir,
+ *  - çıkışları farklı olan işlemler birbirinin kopyası sayılmaz (açık işlem ise her çıkışla eşleşir).
+ */
+function duplicateMatcher(existing, defaultAcc) {
+  const base = t => [t.date, t.symbol, t.dir, t.entry, t.qty, t.acc || defaultAcc].join("|");
+  const pool = new Map();
+  for (const t of existing) {
+    const k = base(t);
+    if (!pool.has(k)) pool.set(k, []);
+    pool.get(k).push(t);
+  }
+  return rec => {
+    const list = pool.get(base(rec));
+    if (!list) return false;
+    const i = list.findIndex(t => t.exit == null || rec.exit == null || t.exit === rec.exit);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    return true;
+  };
+}
 function jsonmerge(raw) {
-  if (!raw || !Array.isArray(raw.trades)) return null;
+  raw = migrateBackup(raw);
+  if (!raw || backupTooNew(raw) || !Array.isArray(raw.trades)) return null;
   const accs = state.accounts.slice(),
     find = n =>
       accs.find(a => a.name.toLocaleLowerCase("tr") === String(n || "").toLocaleLowerCase("tr"));
+  if (!accs.length) accs.push(DEFAULT_ACCOUNT());
   for (const a of raw.accounts || []) {
     if (!find(a.name))
       accs.push({
@@ -383,8 +478,7 @@ function jsonmerge(raw) {
         cur: a.cur ? String(a.cur).toUpperCase() : "",
       });
   }
-  const key = t => [t.date, t.symbol, t.dir, t.entry, t.qty, t.acc || accs[0].id].join("|");
-  const seen = new Set(state.trades.map(key));
+  const isDuplicate = duplicateMatcher(state.trades, accs[0].id);
   let added = 0,
     skipped = 0;
   // yedekteki işlemler hesabı ID ile tutar (acc); hesap adına çevirip bu defterdeki hesapla eşleştir
@@ -402,16 +496,15 @@ function jsonmerge(raw) {
       continue;
     }
     t.acc = ac.id;
-    const k = key(t);
-    if (seen.has(k)) {
+    if (isDuplicate(t)) {
       skipped++;
       continue;
     }
-    seen.add(k);
     state.trades.push(t);
     added++;
   }
   state.accounts = accs;
+  applyExtras(raw.extras, false);
   saveAccounts(accs);
   saveTrades(state.trades);
   return { added, skipped };
@@ -492,6 +585,15 @@ function symbolMultiplier(symbol) {
   return info ? info[1] : 1;
 }
 
+/**
+ * Metin sütunu. tradesToCsv, Excel formül enjeksiyonuna karşı = + - @ ile başlayan metnin başına ' koyar;
+ * içe aktarırken geri alınır (aksi halde dışa-içe aktarım her turda kaydı değiştirirdi).
+ */
+function csvText(value) {
+  const text = String(value || "").trim();
+  return /^'[=+\-@\t\r]/.test(text) ? text.slice(1) : text;
+}
+
 /** "Plan" sütunu: evet/uydu/yes/1 → "evet", "hayır" → "hayır", diğerleri → "". */
 function csvPlan(value) {
   const text = String(value || "").trim();
@@ -541,13 +643,13 @@ function parseCsvRow(row, col, resolveAccount) {
     fees: csvFees(num(col.field(row, "komisyon")), num(col.exact(row, "swap"))),
     mult: num(col.exact(row, "carpan")) || symbolMultiplier(symbol),
     fx: num(col.exact(row, "kur")) || 1,
-    acc: resolveAccount(col.exact(row, "hesap").trim()).id,
+    acc: resolveAccount(csvText(col.exact(row, "hesap"))).id,
     exitDate: toStamp(col.field(row, "cikis_tarihi")),
     plan: csvPlan(col.exact(row, "plan")),
-    mist: String(col.exact(row, "hata") || "").trim(),
-    setup: String(col.exact(row, "setup") || "").trim(),
-    emo: String(col.exact(row, "duygu") || "").trim(),
-    notes: String(col.exact(row, "not") || "").trim(),
+    mist: csvText(col.exact(row, "hata")),
+    setup: csvText(col.exact(row, "setup")),
+    emo: csvText(col.exact(row, "duygu")),
+    notes: csvText(col.exact(row, "not")),
     stop0: num(col.exact(row, "ilk_stop")),
     rt: num(col.exact(row, "puan")),
   };
@@ -595,9 +697,8 @@ function importCsv(text) {
     }
     return account || accounts[0];
   };
-  // Aynı işlemi iki kez eklememek için kimlik anahtarı
-  const dupKey = t => [t.date, t.symbol, t.dir, t.entry, t.qty, t.acc || accounts[0].id].join("|");
-  const seen = new Set(state.trades.map(dupKey));
+  // Aynı işlemi iki kez eklememek için (bkz. duplicateMatcher)
+  const isDuplicate = duplicateMatcher(state.trades, accounts[0].id);
   const trades = state.trades.slice();
 
   let added = 0,
@@ -616,12 +717,10 @@ function importCsv(text) {
       skip(error);
       continue;
     }
-    const key = dupKey(rec);
-    if (seen.has(key)) {
+    if (isDuplicate(rec)) {
       skip("çift kayıt (aynen zaten var)");
       continue;
     }
-    seen.add(key);
     trades.push(rec);
     added++;
     if (missingFxRate(rec, col.exact(row, "kur"))) nofx++;

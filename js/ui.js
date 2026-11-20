@@ -2,7 +2,7 @@
 let RANGE = "all";
 let LASTLOT = {};
 try {
-  LASTLOT = JSON.parse(localStorage.getItem("tj_lastlot_v1") || "{}");
+  LASTLOT = JSON.parse(lsGet("tj_lastlot_v1") || "{}") || {};
 } catch (e) {}
 const dateStamp = d =>
   d.getFullYear() +
@@ -40,7 +40,8 @@ function rangeChips() {
 }
 function toast(msg, kind, ms, action) {
   const box = $("#toasts");
-  box.innerHTML = "";
+  // art arda gelen bildirimler (ör. "N işlem yüklendi" + "kur eksik") birbirini silmesin: en çok 3 tane
+  while (box.children && box.children.length >= 3) box.firstChild.remove();
   const t = document.createElement("div");
   t.className = "toast" + (kind ? " " + kind : "");
   t.setAttribute("role", "status");
@@ -150,6 +151,21 @@ function typedConfirm(m) {
 
 /* Ortak tıklamalar: ipucu, tarih aralığı, hesap filtresi */
 Core.click("tip", { when: el => !el.dataset.act, run: el => toast(el.getAttribute("data-tip")) });
+// KPI kartları tabindex=0 role=button: Enter / Boşluk ile de ipucu açılır (yalnız tıklama değildi)
+Core.listen(
+  "keydown",
+  e => {
+    e.preventDefault();
+    toast(e.target.getAttribute("data-tip"));
+    return true;
+  },
+  {
+    when: e =>
+      (e.key === "Enter" || e.key === " ") &&
+      e.target.dataset.tip !== undefined &&
+      e.target.dataset.act === undefined,
+  }
+);
 Core.click("facc", {
   run: el => {
     setAccountFilter(el.dataset.facc);

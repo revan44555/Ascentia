@@ -74,7 +74,7 @@ ${state.accounts
   )
   .join("")}
 <div class="addrow"><input class="inp" placeholder="Yeni hesap adı" data-newacc="1"><button type="button" class="btn md secondary" data-act="addacc">Ekle</button></div>
-<p class="subtle" style="font-size:13px">Bakiye girince risk yüzdesi ve equity eğrisi hesaplanır. Limitler Analiz ekranında izlenir.</p>
+<p class="subtle" style="font-size:13px">Bakiye girince risk yüzdesi ve equity eğrisi hesaplanır. Limit doluluğu Bugün ekranında görünür; limit dolunca Ekle ekranında uyarı çıkar.</p>
 </div></div>`;
 }
 function viewTags() {
@@ -191,15 +191,21 @@ window.addEventListener("beforeinstallprompt", e => {
 /** Yedeği paylaş (destekleniyorsa) ya da dosya olarak indir. */
 function exportJson() {
   const json = backupJson();
-  markBackup();
   if (navigator.share) {
     const file = new File([json], "ascentia-defter.json", { type: "application/json" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: "Ascentia yedek" }).catch(() => {});
-      Core.refresh();
+      // "son yedek" yalnız paylaşım gerçekten tamamlanınca işlenir (iptal edilirse yedek sayılmaz)
+      navigator
+        .share({ files: [file], title: "Ascentia yedek" })
+        .then(() => {
+          markBackup();
+          Core.refresh();
+        })
+        .catch(() => {});
       return;
     }
   }
+  markBackup();
   downloadText("ascentia-defter.json", json, "application/json");
   toast("Yedek indirildi");
   Core.refresh();
@@ -256,15 +262,20 @@ function closeTrade(el) {
   if (!trade || trade.exit != null) return;
   const price = num($("#cx").value),
     qty = $("#cq") ? num($("#cq").value) : null,
-    errEl = $("#fe-cq");
+    priceErr = $("#fe-cx"),
+    qtyErr = $("#fe-cq");
+  if (priceErr) priceErr.textContent = "";
+  if (qtyErr) qtyErr.textContent = "";
   if (price == null || price <= 0) {
-    if (errEl) errEl.textContent = "Geçerli bir çıkış fiyatı gir.";
+    if (priceErr) priceErr.textContent = "Geçerli bir çıkış fiyatı gir.";
     return;
   }
   if (qty != null) {
     const error = applyPartial(trade.id, qty, price);
     if (error) {
-      if (errEl) errEl.textContent = error;
+      // fiyat hatası fiyat alanının, miktar hatası miktar alanının altında görünür
+      const el = /fiyat/i.test(error) ? priceErr : qtyErr;
+      if (el) el.textContent = error;
       return;
     }
     toast(
@@ -315,6 +326,10 @@ function importJsonFile(file, merge) {
         raw = JSON.parse(txt);
       } catch (e2) {
         toast("JSON okunamadı", "err");
+        return;
+      }
+      if (backupTooNew(raw)) {
+        toast("Bu yedek daha yeni bir Ascentia sürümünden. Uygulamayı güncelle.", "err", 4000);
         return;
       }
       if (merge) {

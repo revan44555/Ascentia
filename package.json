@@ -1,12 +1,13 @@
 {
   "name": "ascentia",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "private": true,
   "description": "Sunucusuz trading journal PWA (derleme adımı yok)",
   "scripts": {
     "test": "node tests/run.js",
     "test:e2e": "node tests/e2e.js",
     "lint": "eslint . && node tests/lint.js",
+    "stamp": "node tests/stamp-sw.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run format:check && npm run lint && npm test"

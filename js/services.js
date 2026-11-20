@@ -83,6 +83,11 @@ function markBackup() {
   state.lastBackupAt = Date.now();
   saveBackupStamp(String(Date.now()));
 }
+/** Haftalık not / kontrol listesi gibi küçük yazıları kaydeder; bağlı dosya yedeği de güncellenir. */
+function saveJournalNote(key, value) {
+  lsSet(key, value);
+  queueFile();
+}
 
 const TAGKIND = [
   ["setups", "Setup"],
